@@ -1,6 +1,8 @@
 # Graphify Globe React Responsive
 
-Visualizador local de archivos `graph.json` generados por Graphify, construido con React, Vite y Three.js.
+Visualizador local de archivos `graph.json` generados por [Graphify](https://github.com/), construido con React, Vite y Three.js.
+
+Compatible con el formato nativo NetworkX (`nodes` + `links`) y con archivos legacy (`edges`, `relationships`, etc.), sin asumir un framework concreto.
 
 ![Vista previa de Graphify Globe](docs/preview.png)
 
@@ -10,17 +12,36 @@ https://yeremitech.github.io/graphify-globe/
 
 ## Funciones
 
-- El globo inicia vacío y carga el archivo mediante el selector o arrastrándolo a la ventana.
-- El buscador está integrado dentro del panel izquierdo.
-- La búsqueda filtra por nombre, clase, método, archivo, paquete, tipo e ID.
-- El nodo seleccionado se muestra en blanco.
-- Los destinos de relaciones salientes se muestran en magenta.
-- Los orígenes de relaciones entrantes se muestran en cian.
-- Los nodos con conexiones en ambas direcciones se muestran en amarillo.
-- Las relaciones seleccionadas incluyen líneas y partículas animadas.
-- Los nodos no relacionados se atenúan para mejorar la lectura.
-- La interfaz se adapta a escritorio, tablet, móvil y pantallas en orientación horizontal.
-- El archivo JSON se procesa localmente en el navegador mediante un Web Worker.
+- Importación local de `graph.json` por selector de archivo o drag and drop.
+- En navegadores compatibles, botón para abrir la carpeta `graphify-out` y localizar `graph.json`.
+- Detección automática de formato Graphify nativo o legacy.
+- Procesamiento en Web Worker: el hilo principal no hace `JSON.parse`.
+- Grafo completo separado del subgrafo visible según el nivel de detalle (Ligero / Equilibrado / Detallado).
+- Selección equilibrada por comunidad para no monopolizar la vista.
+- Filtros dinámicos de **tipo** y **relación** generados desde el contenido real del archivo.
+- Buscador en el panel lateral sobre todos los nodos normalizados (no solo los visibles).
+- Si buscas un nodo oculto por el límite de calidad, se incluye temporalmente con su vecindario.
+- Panel de nodo con comunidad, archivo, ubicación, kind, grado, metadatos y conexiones paginadas.
+- Colores de selección por dirección: blanco (seleccionado), magenta (saliente), cian (entrante), amarillo (bidireccional o conectado en grafos no dirigidos).
+- Diagnósticos visibles: dangling edges, self-loops, IDs duplicados, hyperedges detectados, etc.
+- Interfaz adaptable a escritorio, tablet, móvil y orientación horizontal, con gestos en el panel.
+
+## Formato Graphify
+
+Acepta el `graph.json` oficial similar a:
+
+```json
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [],
+  "links": [],
+  "hyperedges": []
+}
+```
+
+También sigue funcionando con esquemas anteriores que usen `edges`, `relationships` u otras colecciones equivalentes.
 
 ## Requisitos
 
@@ -42,15 +63,21 @@ http://localhost:5173
 
 También puedes ejecutar `INICIAR-WINDOWS.bat`.
 
-## Importar el grafo
+## Pruebas
 
-Selecciona directamente el archivo generado por Graphify:
-
-```text
-graph.json
+```powershell
+npm test
 ```
 
-No es necesario copiarlo dentro del proyecto.
+## Importar el grafo
+
+Selecciona el archivo generado por Graphify:
+
+```text
+graphify-out/graph.json
+```
+
+No es necesario copiarlo dentro del proyecto ni cambiar la librería Graphify.
 
 ## Producción
 

@@ -1,9 +1,17 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 
-/**
- * Compact dropdown matching the quality-menu visual language.
- * options: [{ value, label, hint?, color? }]
- */
+function shouldOpenUpward(element) {
+  if (!element) return false;
+  const rect = element.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  const spaceBelow = viewportHeight - rect.bottom;
+  const spaceAbove = rect.top;
+  const preferredHeight = Math.min(280, viewportHeight * 0.42);
+  const isCompact = window.matchMedia('(max-width: 760px), (hover: none) and (pointer: coarse)').matches;
+  if (isCompact) return spaceAbove >= preferredHeight * 0.45 || spaceAbove > spaceBelow;
+  return spaceBelow < preferredHeight && spaceAbove > spaceBelow;
+}
+
 export default function FilterMenu({
   label,
   value,
@@ -14,6 +22,7 @@ export default function FilterMenu({
   const listId = useId();
   const fieldRef = useRef(null);
   const [open, setOpen] = useState(false);
+  const [opensUp, setOpensUp] = useState(false);
   const selected = options.find((option) => option.value === value) || options[0];
 
   useEffect(() => {
@@ -25,14 +34,29 @@ export default function FilterMenu({
     const onKeyDown = (event) => {
       if (event.key === 'Escape') setOpen(false);
     };
+    const syncDirection = () => {
+      setOpensUp(shouldOpenUpward(fieldRef.current));
+    };
 
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', syncDirection);
+    window.addEventListener('orientationchange', syncDirection);
+
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', syncDirection);
+      window.removeEventListener('orientationchange', syncDirection);
     };
   }, [open]);
+
+  const toggle = () => {
+    setOpen((current) => {
+      if (!current) setOpensUp(shouldOpenUpward(fieldRef.current));
+      return !current;
+    });
+  };
 
   const choose = (nextValue) => {
     onChange(nextValue);
@@ -41,7 +65,7 @@ export default function FilterMenu({
 
   return (
     <div
-      className={`filter-field ${open ? 'is-open' : ''} align-${align}`}
+      className={`filter-field ${open ? 'is-open' : ''} ${opensUp ? 'opens-up' : 'opens-down'} align-${align}`}
       ref={fieldRef}
     >
       <span className="filter-label" id={`${listId}-label`}>
@@ -54,7 +78,7 @@ export default function FilterMenu({
         aria-expanded={open}
         aria-controls={listId}
         aria-labelledby={`${listId}-label`}
-        onClick={() => setOpen((current) => !current)}
+        onClick={toggle}
       >
         <span className="filter-trigger-text">
           {selected?.color ? (
