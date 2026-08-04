@@ -13,7 +13,7 @@ export default function ImportPanel({
       <div className="import-kicker">GRAPHIFY · JSON IMPORT</div>
       <h1 id="import-title">Arquitectura sobre un globo 3D</h1>
       <p>
-        Selecciona <code>graphify-out/graph.json</code>. El globo permanece vacío hasta que
+        Selecciona <code>graph.json</code>. El globo permanece vacío hasta que
         importes el archivo; los datos no se envían a ningún servidor.
       </p>
 

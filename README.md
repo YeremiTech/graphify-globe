@@ -41,7 +41,7 @@ También puedes ejecutar `INICIAR-WINDOWS.bat`.
 Selecciona directamente el archivo generado por Graphify:
 
 ```text
-nexo-chat-backend\graphify-out\graph.json
+graph.json
 ```
 
 No es necesario copiarlo dentro del proyecto.
