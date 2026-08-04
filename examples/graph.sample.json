@@ -1,0 +1,65 @@
+{
+  "nodes": [
+    {
+      "id": "controller",
+      "label": "ChatController",
+      "type": "class",
+      "source_file": "src/main/java/com/nexo/chat/ChatController.java",
+      "source_location": "L18-L95"
+    },
+    {
+      "id": "service",
+      "label": "ChatService",
+      "type": "class",
+      "source_file": "src/main/java/com/nexo/chat/ChatService.java",
+      "source_location": "L12-L164"
+    },
+    {
+      "id": "repository",
+      "label": "MessageRepository",
+      "type": "interface",
+      "source_file": "src/main/java/com/nexo/chat/MessageRepository.java",
+      "source_location": "L1-L28"
+    },
+    {
+      "id": "entity",
+      "label": "MessageEntity",
+      "type": "class",
+      "source_file": "src/main/java/com/nexo/chat/MessageEntity.java",
+      "source_location": "L8-L72"
+    },
+    {
+      "id": "config",
+      "label": "application.yml",
+      "type": "config",
+      "source_file": "src/main/resources/application.yml",
+      "source_location": "L1-L54"
+    }
+  ],
+  "edges": [
+    {
+      "source": "controller",
+      "target": "service",
+      "relation": "calls",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "service",
+      "target": "repository",
+      "relation": "uses",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "source": "repository",
+      "target": "entity",
+      "relation": "manages",
+      "confidence": "INFERRED"
+    },
+    {
+      "source": "service",
+      "target": "config",
+      "relation": "reads",
+      "confidence": "INFERRED"
+    }
+  ]
+}
