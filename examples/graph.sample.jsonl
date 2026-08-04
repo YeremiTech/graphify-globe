@@ -1,9 +1,0 @@
-{"type":"class","id":"controller","label":"ChatController","source_file":"src/main/java/com/nexo/chat/ChatController.java","source_location":"L18-L95"}
-{"type":"class","id":"service","label":"ChatService","source_file":"src/main/java/com/nexo/chat/ChatService.java","source_location":"L12-L164"}
-{"type":"interface","id":"repository","label":"MessageRepository","source_file":"src/main/java/com/nexo/chat/MessageRepository.java","source_location":"L1-L28"}
-{"type":"class","id":"entity","label":"MessageEntity","source_file":"src/main/java/com/nexo/chat/MessageEntity.java","source_location":"L8-L72"}
-{"type":"config","id":"config","label":"application.yml","source_file":"src/main/resources/application.yml","source_location":"L1-L54"}
-{"type":"edge","source":"controller","target":"service","relation":"calls","confidence":"EXTRACTED"}
-{"type":"edge","source":"service","target":"repository","relation":"uses","confidence":"EXTRACTED"}
-{"type":"edge","source":"repository","target":"entity","relation":"manages","confidence":"INFERRED"}
-{"type":"edge","source":"service","target":"config","relation":"reads","confidence":"INFERRED"}

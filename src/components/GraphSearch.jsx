@@ -1,219 +1,137 @@
-import { jsx, jsxs } from "react/jsx-runtime";
-import { useEffect, useId, useRef, useState } from "react";
-const DEBOUNCE_MS = 200;
-function GraphSearch({
-  onSearch,
-  onSelectNode,
-  onCancelSearch,
-  onQueryChange
-}) {
-  const listId = useId();
-  const inputId = useId();
-  const statusId = useId();
-  const [query, setQuery] = useState("");
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+function normalize(value) {
+  return String(value || '').toLocaleLowerCase('es');
+}
+
+function scoreNode(node, term) {
+  const label = normalize(node.label);
+  const fields = [node.id, node.file, node.group, node.kind].map(normalize);
+  if (label === term) return 0;
+  if (label.startsWith(term)) return 1;
+  if (label.includes(term)) return 2;
+  if (fields.some((field) => field.startsWith(term))) return 3;
+  return 4;
+}
+
+export default function GraphSearch({ graph, onSelectNode }) {
+  const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [results, setResults] = useState([]);
-  const [totalMatched, setTotalMatched] = useState(0);
-  const [searching, setSearching] = useState(false);
-  const [statusText, setStatusText] = useState("");
   const rootRef = useRef(null);
-  const inputRef = useRef(null);
-  const requestSerial = useRef(0);
-  const activeSearchIdRef = useRef(null);
-  useEffect(() => {
-    onQueryChange?.(query.trim());
-  }, [query, onQueryChange]);
-  useEffect(() => {
-    const term = query.trim();
-    if (!term) {
-      if (activeSearchIdRef.current) {
-        onCancelSearch?.(activeSearchIdRef.current);
-        activeSearchIdRef.current = null;
-      }
-      setResults([]);
-      setTotalMatched(0);
-      setOpen(false);
-      setSearching(false);
-      setStatusText("");
-      return void 0;
+
+  const results = useMemo(() => {
+    const term = normalize(query).trim();
+    if (!term || !graph?.nodes) return [];
+
+    const tokens = term.split(/\s+/).filter(Boolean);
+    const matches = [];
+
+    for (const node of graph.nodes) {
+      const searchable = normalize([node.label, node.id, node.file, node.group, node.kind].join(' '));
+      if (!tokens.every((token) => searchable.includes(token))) continue;
+      matches.push(node);
+      if (matches.length >= 160) break;
     }
-    const serial = requestSerial.current + 1;
-    requestSerial.current = serial;
-    setSearching(true);
-    setStatusText("Buscando en el índice completo…");
-    setOpen(true);
-    const timer = setTimeout(async () => {
-      if (activeSearchIdRef.current) {
-        onCancelSearch?.(activeSearchIdRef.current);
-      }
-      const response = await onSearch(term, {
-        onPartial: (partialResults, meta) => {
-          if (requestSerial.current !== serial) return;
-          setResults(partialResults || []);
-          setTotalMatched(meta?.totalMatched ?? (partialResults || []).length);
-          setActiveIndex(0);
-          setStatusText(
-            `Mostrando ${(partialResults || []).length} de ${meta?.totalMatched ?? "…"} coincidencias…`
-          );
-        }
-      });
-      if (requestSerial.current !== serial) return;
-      if (response?.cancelled) {
-        setSearching(false);
-        setStatusText("Búsqueda cancelada");
-        return;
-      }
-      const matches = Array.isArray(response) ? response : response?.results || [];
-      const matched = Array.isArray(response) ? matches.length : response?.totalMatched ?? matches.length;
-      activeSearchIdRef.current = response?.searchId || null;
-      setResults(matches);
-      setTotalMatched(matched);
-      setActiveIndex(0);
-      setOpen(true);
-      setSearching(false);
-      setStatusText(
-        matches.length ? `${matches.length} resultado${matches.length === 1 ? "" : "s"}${matched > matches.length ? ` (de ${matched} coincidencias)` : ""}` : `Sin resultados para “${term}”`
-      );
-    }, DEBOUNCE_MS);
-    return () => {
-      clearTimeout(timer);
-      if (activeSearchIdRef.current) {
-        onCancelSearch?.(activeSearchIdRef.current);
-        activeSearchIdRef.current = null;
-      }
-    };
-  }, [query, onSearch, onCancelSearch]);
-  useEffect(() => () => {
-    if (activeSearchIdRef.current) {
-      onCancelSearch?.(activeSearchIdRef.current);
-      activeSearchIdRef.current = null;
-    }
-  }, [onCancelSearch]);
+
+    return matches
+      .sort((a, b) => {
+        const scoreDifference = scoreNode(a, term) - scoreNode(b, term);
+        if (scoreDifference !== 0) return scoreDifference;
+        return b.degree - a.degree || a.label.localeCompare(b.label);
+      })
+      .slice(0, 18);
+  }, [graph, query]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setOpen(Boolean(query.trim()));
+  }, [query]);
+
   useEffect(() => {
     const close = (event) => {
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     };
-    window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
   }, []);
+
   const choose = (node) => {
     setQuery(node.label);
     setOpen(false);
-    setStatusText(`Seleccionado: ${node.label}`);
-    onSelectNode(node, { fromSearch: true });
+    onSelectNode(node);
   };
+
   const clear = () => {
-    if (activeSearchIdRef.current) {
-      onCancelSearch?.(activeSearchIdRef.current);
-      activeSearchIdRef.current = null;
-    }
-    requestSerial.current += 1;
-    setQuery("");
+    setQuery('');
     setOpen(false);
-    setResults([]);
-    setTotalMatched(0);
-    setStatusText("");
-    inputRef.current?.focus();
   };
+
   const onKeyDown = (event) => {
-    if (event.key === "ArrowDown") {
+    if (event.key === 'ArrowDown') {
       event.preventDefault();
       setOpen(true);
       setActiveIndex((value) => Math.min(value + 1, Math.max(0, results.length - 1)));
-    } else if (event.key === "ArrowUp") {
+    } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       setActiveIndex((value) => Math.max(0, value - 1));
-    } else if (event.key === "Enter") {
-      if (open && results[activeIndex]) {
-        event.preventDefault();
-        choose(results[activeIndex]);
-      }
-    } else if (event.key === "Escape") {
+    } else if (event.key === 'Enter' && results[activeIndex]) {
       event.preventDefault();
+      choose(results[activeIndex]);
+    } else if (event.key === 'Escape') {
       event.stopPropagation();
-      if (open) {
-        setOpen(false);
-        setStatusText(query.trim() ? `${results.length} resultados (lista cerrada)` : "");
-      } else if (query) {
-        clear();
-      }
-    } else if (event.key === "Home" && open && results.length) {
-      event.preventDefault();
-      setActiveIndex(0);
-    } else if (event.key === "End" && open && results.length) {
-      event.preventDefault();
-      setActiveIndex(results.length - 1);
+      setOpen(false);
     }
   };
-  const activeOptionId = open && results[activeIndex] ? `${listId}-option-${activeIndex}` : void 0;
-  return /* @__PURE__ */ jsxs("section", { className: "graph-search", ref: rootRef, "aria-label": "Búsqueda global de nodos", children: [
-    /* @__PURE__ */ jsxs("div", { className: "search-label-row", children: [
-      /* @__PURE__ */ jsx("label", { htmlFor: inputId, children: "BUSCADOR GLOBAL" }),
-      query.trim() && /* @__PURE__ */ jsx("small", { id: statusId, "aria-live": "polite", "aria-atomic": "true", children: searching ? "buscando…" : `${results.length}${totalMatched > results.length ? `/${totalMatched}` : ""} resultados` })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "search-field", children: [
-      /* @__PURE__ */ jsx("span", { "aria-hidden": "true", children: "⌕" }),
-      /* @__PURE__ */ jsx(
-        "input",
-        {
-          ref: inputRef,
-          id: inputId,
-          role: "combobox",
-          value: query,
-          onChange: (event) => setQuery(event.target.value),
-          onFocus: () => query.trim() && setOpen(true),
-          onKeyDown,
-          placeholder: "ID, nombre, ruta, tipo, módulo, etiquetas…",
-          autoComplete: "off",
-          spellCheck: "false",
-          "aria-autocomplete": "list",
-          "aria-expanded": open,
-          "aria-controls": listId,
-          "aria-activedescendant": activeOptionId,
-          "aria-describedby": query.trim() ? statusId : void 0
-        }
-      ),
-      query && /* @__PURE__ */ jsx("button", { type: "button", onClick: clear, "aria-label": "Limpiar búsqueda", children: "×" })
-    ] }),
-    /* @__PURE__ */ jsx("div", { className: "sr-only", "aria-live": "polite", "aria-atomic": "true", children: statusText }),
-    open && /* @__PURE__ */ jsx(
-      "div",
-      {
-        id: listId,
-        className: "search-results",
-        role: "listbox",
-        "aria-label": "Resultados de búsqueda",
-        children: results.length ? results.map((node, index) => /* @__PURE__ */ jsxs(
-          "button",
-          {
-            type: "button",
-            id: `${listId}-option-${index}`,
-            role: "option",
-            "aria-selected": index === activeIndex,
-            className: index === activeIndex ? "is-active" : "",
-            onMouseEnter: () => setActiveIndex(index),
-            onClick: () => choose(node),
-            children: [
-              /* @__PURE__ */ jsx("span", { className: "search-kind-dot", style: { background: node.color }, "aria-hidden": "true" }),
-              /* @__PURE__ */ jsxs("span", { className: "search-result-copy", children: [
-                /* @__PURE__ */ jsx("strong", { children: node.label }),
-                /* @__PURE__ */ jsxs("small", { children: [
-                  node.kind,
-                  node.group ? ` · ${node.group}` : "",
-                  node.file ? ` · ${node.file}` : "",
-                  node.inView ? "" : " · fuera de vista"
-                ] })
-              ] }),
-              /* @__PURE__ */ jsx("b", { "aria-label": `Grado ${node.degree}`, children: node.degree })
-            ]
-          },
-          `${node.numericId}-${node.id}`
-        )) : /* @__PURE__ */ jsx("p", { role: "status", children: searching ? "Buscando en el índice completo…" : `No se encontraron nodos para “${query}”.` })
-      }
-    )
-  ] });
+
+  return (
+    <section className="graph-search" ref={rootRef} aria-label="Buscar nodos">
+      <div className="search-label-row">
+        <span>BUSCADOR DE NODOS</span>
+        {query.trim() && <small>{results.length} resultados</small>}
+      </div>
+      <div className="search-field">
+        <span aria-hidden="true">⌕</span>
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => query.trim() && setOpen(true)}
+          onKeyDown={onKeyDown}
+          placeholder="Clase, método, archivo, paquete o ID…"
+          autoComplete="off"
+          spellCheck="false"
+        />
+        {query && (
+          <button type="button" onClick={clear} aria-label="Limpiar búsqueda">
+            ×
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="search-results">
+          {results.length ? (
+            results.map((node, index) => (
+              <button
+                type="button"
+                key={node.id}
+                className={index === activeIndex ? 'is-active' : ''}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(node)}
+              >
+                <span className="search-kind-dot" style={{ background: node.color, color: node.color }} />
+                <span className="search-result-copy">
+                  <strong>{node.label}</strong>
+                  <small>{node.kind} · {node.group || node.file || node.id}</small>
+                </span>
+                <b>{node.degree}</b>
+              </button>
+            ))
+          ) : (
+            <p>No se encontraron nodos para “{query}”.</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
-export {
-  GraphSearch as default
-};

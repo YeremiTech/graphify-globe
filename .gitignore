@@ -3,6 +3,3 @@ dist/
 .vite/
 *.log
 .DS_Store
-benchmarks/generated/
-benchmarks/results/suite-*.json
-benchmarks/results/suite-*.md
