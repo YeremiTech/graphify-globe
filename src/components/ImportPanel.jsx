@@ -9,7 +9,7 @@ const QUALITY_OPTIONS = [
 export default function ImportPanel({
   quality,
   onQualityChange,
-  onImport,
+  fileInputId = 'graphify-file-input',
   onOpenFolder,
   supportsFolderPicker = false,
   loading,
@@ -83,7 +83,7 @@ export default function ImportPanel({
         {open && (
           <ul
             id={listId}
-            className="quality-menu"
+            className="quality-menu quality-menu-up"
             role="listbox"
             aria-labelledby={`${listId}-label`}
           >
@@ -111,9 +111,19 @@ export default function ImportPanel({
         )}
       </div>
 
-      <button type="button" className="primary-button" onClick={onImport} disabled={loading}>
-        {loading ? 'Procesando…' : 'Importar graph.json'}
-      </button>
+      {loading ? (
+        <button type="button" className="primary-button" disabled>
+          Procesando…
+        </button>
+      ) : (
+        <label
+          className="primary-button"
+          htmlFor={fileInputId}
+          onPointerDown={() => setOpen(false)}
+        >
+          Importar graph.json
+        </label>
+      )}
 
       {supportsFolderPicker && (
         <button

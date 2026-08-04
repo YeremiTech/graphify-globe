@@ -41,6 +41,20 @@ code { color: #78eeb4; }
   border: 0;
 }
 
+.file-input {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  border: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .app-shell {
   position: relative;
   width: 100%;
@@ -261,8 +275,18 @@ code { color: #78eeb4; }
   box-sizing: border-box;
   animation: quality-menu-in 140ms ease-out;
 }
+.quality-menu-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+  box-shadow: 0 -14px 42px rgba(0, 0, 0, 0.5), inset 0 0 24px rgba(21, 122, 78, 0.06);
+  animation: quality-menu-in-up 140ms ease-out;
+}
 @keyframes quality-menu-in {
   from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes quality-menu-in-up {
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .quality-menu li { min-width: 0; }
@@ -308,11 +332,20 @@ code { color: #78eeb4; }
 .primary-button {
   width: 100%;
   min-height: 47px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #031109;
   font-weight: 800;
   background: var(--green);
   border-color: var(--green);
   box-shadow: 0 0 26px rgba(56,229,142,0.17);
+  cursor: pointer;
+  text-align: center;
+  box-sizing: border-box;
+}
+label.primary-button {
+  margin: 0;
 }
 .primary-button:hover { color: #eafff5; }
 .primary-button:disabled { cursor: wait; opacity: 0.7; }

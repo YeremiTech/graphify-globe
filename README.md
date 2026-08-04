@@ -8,7 +8,9 @@ Compatible con el formato nativo NetworkX (`nodes` + `links`) y con archivos leg
 
 ## Demo
 
-https://yeremitech.github.io/graphify-globe/
+https://graphify-globe.onrender.com/
+
+> Hosting principal en Render. El sitio en GitHub Pages ya no se publica desde este repositorio.
 
 ## Funciones
 

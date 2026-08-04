@@ -188,7 +188,12 @@ export default function App() {
     event.target.value = '';
   };
 
-  const openPicker = () => inputRef.current?.click();
+  const openPicker = () => {
+    const input = inputRef.current;
+    if (!input || loading) return;
+    input.value = '';
+    input.click();
+  };
 
   const openFolder = useCallback(async () => {
     if (!folderSupported || loading) return;
@@ -339,8 +344,9 @@ export default function App() {
       {...dropHandlers}
     >
       <input
+        id="graphify-file-input"
         ref={inputRef}
-        className="sr-only"
+        className="file-input"
         type="file"
         accept="application/json,.json"
         onChange={onInputChange}
@@ -419,7 +425,7 @@ export default function App() {
         <ImportPanel
           quality={quality}
           onQualityChange={setQuality}
-          onImport={openPicker}
+          fileInputId="graphify-file-input"
           onOpenFolder={openFolder}
           supportsFolderPicker={folderSupported}
           loading={loading}
