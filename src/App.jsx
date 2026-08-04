@@ -6,6 +6,7 @@ import NodeInfoPanel from './components/NodeInfoPanel.jsx';
 import { hydrateIndexes } from './graph/buildGraphIndexes.js';
 import { KIND_COLORS, MAX_FILE_SIZE_BYTES, QUALITY_LIMITS } from './graph/constants.js';
 import { ensureNodeVisible } from './graph/selectVisibleSubgraph.js';
+import { notifyError, notifySuccess, notifyWarning } from './notify.js';
 
 function supportsDirectoryPicker() {
   return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
@@ -83,7 +84,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Importa un graph.json para comenzar');
-  const [error, setError] = useState('');
   const [draggingFile, setDraggingFile] = useState(false);
   const [resetToken, setResetToken] = useState(0);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -122,24 +122,45 @@ export default function App() {
         setPanelOpen(true);
         setProgress(100);
         setLoading(false);
-        setError('');
         setStatus(buildStatusMessage(nextGraph));
+
+        const formatLabel = nextGraph.format === 'graphify-native'
+          ? 'Graphify nativo'
+          : 'Formato legacy';
+        notifySuccess(
+          'Grafo cargado',
+          `${formatLabel} · ${nextGraph.totalNodes.toLocaleString('es')} nodos · ${nextGraph.totalEdges.toLocaleString('es')} relaciones`,
+        );
+
+        const warnings = nextGraph.diagnostics?.warnings || [];
+        if (warnings.length) {
+          notifyWarning(
+            'Advertencias del archivo',
+            warnings.slice(0, 3).join(' · '),
+          );
+        }
         return;
       }
 
       if (message.type === 'error') {
         setLoading(false);
         setProgress(0);
-        setError(message.message || 'El archivo no tiene un formato de grafo reconocido.');
         setStatus('No se pudo cargar el grafo');
+        notifyError(
+          'Error al cargar el grafo',
+          message.message || 'El archivo no tiene un formato de grafo reconocido.',
+        );
       }
     };
 
     worker.onerror = (event) => {
       setLoading(false);
       setProgress(0);
-      setError(event.message || 'Falló el proceso de análisis del JSON.');
       setStatus('Error en el analizador');
+      notifyError(
+        'Error en el analizador',
+        event.message || 'Falló el proceso de análisis del JSON.',
+      );
     };
 
     return () => worker.terminate();
@@ -156,15 +177,17 @@ export default function App() {
   const importFile = useCallback(
     async (file) => {
       if (!file || loading) return;
-      setError('');
 
       if (!file.name.toLowerCase().endsWith('.json')) {
-        setError('Selecciona un archivo con extensión .json.');
+        notifyError('Archivo no válido', 'Selecciona un archivo con extensión .json.');
         return;
       }
 
       if (file.size > MAX_FILE_SIZE_BYTES) {
-        setError('El archivo supera 120 MB. Reduce el grafo antes de importarlo.');
+        notifyError(
+          'Archivo demasiado grande',
+          'El archivo supera 120 MB. Reduce el grafo antes de importarlo.',
+        );
         return;
       }
 
@@ -197,14 +220,16 @@ export default function App() {
 
   const openFolder = useCallback(async () => {
     if (!folderSupported || loading) return;
-    setError('');
     try {
       const handle = await window.showDirectoryPicker({ mode: 'read' });
       const file = await findGraphJsonInDirectory(handle);
       await importFile(file);
     } catch (folderError) {
       if (folderError?.name === 'AbortError') return;
-      setError(folderError.message || 'No se pudo abrir la carpeta seleccionada.');
+      notifyError(
+        'No se pudo abrir la carpeta',
+        folderError.message || 'Selecciona graphify-out o la raíz del proyecto.',
+      );
     }
   }, [folderSupported, importFile, loading]);
 
@@ -237,7 +262,6 @@ export default function App() {
     setSelectedNode(null);
     setHoveredNode(null);
     setPanelOpen(true);
-    setError('');
     setProgress(0);
     setRelationFilter('all');
     setKindFilter('all');
@@ -430,7 +454,6 @@ export default function App() {
           supportsFolderPicker={folderSupported}
           loading={loading}
           progress={progress}
-          error={error}
         />
       )}
 

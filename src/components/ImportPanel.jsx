@@ -14,7 +14,6 @@ export default function ImportPanel({
   supportsFolderPicker = false,
   loading,
   progress,
-  error,
   statusHints = [],
 }) {
   const listId = useId();
@@ -146,8 +145,6 @@ export default function ImportPanel({
           <small>{progress}%</small>
         </div>
       )}
-
-      {error && <div className="error-message">{error}</div>}
 
       {statusHints.length > 0 && (
         <ul className="import-hints">

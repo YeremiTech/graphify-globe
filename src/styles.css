@@ -354,7 +354,6 @@ label.primary-button {
 .progress-track { height: 4px; background: rgba(67, 128, 102, 0.2); overflow: hidden; }
 .progress-track span { display: block; height: 100%; background: var(--green); box-shadow: 0 0 12px var(--green); transition: width 180ms ease; }
 .progress-block small { color: var(--green); }
-.error-message { margin-top: 15px; padding: 10px 12px; border-left: 2px solid #ff6868; background: rgba(94, 17, 17, 0.3); color: #ffc0c0; font-size: 0.7rem; line-height: 1.5; }
 
 .graph-summary {
   position: absolute;
@@ -430,7 +429,7 @@ label.primary-button {
 }
 @keyframes slide-in-left { from { transform: translateX(-22px); opacity: 0; } }
 
-/* Pestaña del borde (solo relevante en móvil cuando el panel está oculto). */
+/* PestaÃ±a del borde (solo relevante en mÃ³vil cuando el panel estÃ¡ oculto). */
 .panel-edge-tab {
   display: none;
 }
@@ -711,8 +710,8 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   .graph-summary span { padding: 6px 8px; font-size: 0.56rem; }
 
   /*
-   * Panel como drawer lateral: se desliza L↔R.
-   * .is-collapsed → translateX(-100%) (oculto a la izquierda).
+   * Panel como drawer lateral: se desliza Lâ†”R.
+   * .is-collapsed â†’ translateX(-100%) (oculto a la izquierda).
    */
   .node-panel {
     top: var(--topbar-height);
@@ -911,7 +910,7 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   .node-empty-state { min-height: 100%; }
 }
 
-/* —— Additive Graphify diagnostics / filters (keep existing look) —— */
+/* â€”â€” Additive Graphify diagnostics / filters (keep existing look) â€”â€” */
 .folder-button {
   width: 100%;
   margin-top: 10px;
@@ -1238,5 +1237,116 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
 
   .filter-field.opens-up .filter-menu {
     bottom: calc(100% + 8px);
+  }
+}
+
+:root {
+  /* Sileo morph SVG is hardcoded to 350px — never change this to % or >350 */
+  --sileo-width: 350px;
+  --sileo-toast-gutter: 12px;
+  --sileo-state-success: #38e58e;
+  --sileo-state-loading: #63b993;
+  --sileo-state-error: #ff8d8d;
+  --sileo-state-warning: #ffca4b;
+  --sileo-state-info: #37dfff;
+  --sileo-state-action: #9c68ff;
+}
+
+[data-sileo-viewport] {
+  z-index: 80;
+  box-sizing: border-box;
+}
+
+[data-sileo-viewport][data-position$="center"] {
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+  align-items: center;
+  padding-left: max(var(--sileo-toast-gutter), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--sileo-toast-gutter), env(safe-area-inset-right, 0px));
+  padding-top: 0.35rem;
+  padding-bottom: 0.75rem;
+}
+
+[data-sileo-viewport][data-position^="top"][data-position$="center"] {
+  top: calc(var(--topbar-height) + 8px + env(safe-area-inset-top, 0px)) !important;
+}
+
+[data-sileo-toast] {
+  box-sizing: border-box;
+  width: 350px !important;
+  max-width: 350px !important;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+[data-sileo-title] {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-family: inherit;
+}
+
+[data-sileo-description] {
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.graphify-toast-title {
+  color: #e9fff4 !important;
+}
+
+.graphify-toast-description {
+  color: #93b5a7 !important;
+}
+
+.graphify-toast-badge {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--_c, var(--green)) 35%, transparent);
+}
+
+[data-sileo-viewport][data-theme="dark"] [data-sileo-description],
+[data-sileo-viewport][data-theme="dark"] .graphify-toast-description {
+  color: #93b5a7 !important;
+}
+
+@media (max-width: 760px) {
+  [data-sileo-viewport][data-position^="top"][data-position$="center"] {
+    top: calc(var(--topbar-height) + 6px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  [data-sileo-title] {
+    font-size: 0.78rem;
+  }
+
+  [data-sileo-description] {
+    font-size: 0.7rem;
+    padding: 0.85rem 0.9rem;
+  }
+}
+
+/* Pantallas más estrechas que el morph (350 + gutters): escala el toast completo */
+@media (max-width: 374px) {
+  :root {
+    --sileo-toast-gutter: 10px;
+  }
+
+  [data-sileo-toast] {
+    zoom: calc((100vw - 20px) / 350);
+  }
+
+  [data-sileo-description] {
+    font-size: 0.66rem;
+    padding: 0.75rem 0.8rem;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 560px) {
+  [data-sileo-viewport][data-position^="top"][data-position$="center"] {
+    top: calc(var(--topbar-height) + 4px + env(safe-area-inset-top, 0px)) !important;
   }
 }
