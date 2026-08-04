@@ -3,6 +3,11 @@ import * as THREE from 'three';
 import { WORLD_COUNTRIES } from '../data/world-data.js';
 
 const RADIUS = 1.5;
+/** Distancia inicial de la cámara (más lejos = globo más pequeño al cargar). */
+const CAMERA_Z_DEFAULT = 5.85;
+/** Límites de zoom (rueda del ratón y pellizco con los dedos). */
+const CAMERA_Z_MIN = 3.0;
+const CAMERA_Z_MAX = 9.2;
 const NODE_COLORS = {
   class: '#39e97e',
   interface: '#35dcff',
@@ -378,7 +383,7 @@ export default function GlobeScene({
   useEffect(() => {
     const context = sceneRef.current;
     if (!context) return;
-    context.camera.position.set(0, 0, 4.45);
+    context.camera.position.set(0, 0, CAMERA_Z_DEFAULT);
     context.globe.rotation.set(-0.12, -0.45, 0);
   }, [resetToken]);
 
@@ -390,7 +395,8 @@ export default function GlobeScene({
     scene.fog = new THREE.FogExp2(0x010503, 0.052);
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(0, 0, 4.45);
+    // Arranca más alejada para que el globo no ocupe toda la pantalla al inicio.
+    camera.position.set(0, 0, CAMERA_Z_DEFAULT);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -482,6 +488,27 @@ export default function GlobeScene({
       lastY: 0,
     };
 
+    // Estado del pellizco (pinch-to-zoom) con dos dedos.
+    const pinchState = {
+      active: false,
+      startDistance: 0,
+      startZ: CAMERA_Z_DEFAULT,
+    };
+
+    const touchDistance = (touches) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const applyZoomDelta = (delta) => {
+      camera.position.z = THREE.MathUtils.clamp(
+        camera.position.z + delta,
+        CAMERA_Z_MIN,
+        CAMERA_Z_MAX,
+      );
+    };
+
     const context = {
       scene,
       camera,
@@ -532,6 +559,8 @@ export default function GlobeScene({
     };
 
     const onPointerDown = (event) => {
+      // Con pellizco activo no iniciar arrastre de rotación.
+      if (pinchState.active) return;
       dragState.active = true;
       context.focusQuaternion = null;
       dragState.moved = false;
@@ -544,6 +573,7 @@ export default function GlobeScene({
     };
 
     const onPointerMove = (event) => {
+      if (pinchState.active) return;
       if (dragState.active) {
         const dx = event.clientX - dragState.lastX;
         const dy = event.clientY - dragState.lastY;
@@ -562,7 +592,7 @@ export default function GlobeScene({
 
     const onPointerUp = (event) => {
       if (!dragState.active) return;
-      const shouldSelect = !dragState.moved;
+      const shouldSelect = !dragState.moved && !pinchState.active;
       dragState.active = false;
       renderer.domElement.releasePointerCapture?.(event.pointerId);
       renderer.domElement.style.cursor = 'grab';
@@ -575,7 +605,41 @@ export default function GlobeScene({
 
     const onWheel = (event) => {
       event.preventDefault();
-      camera.position.z = THREE.MathUtils.clamp(camera.position.z + event.deltaY * 0.0028, 3.1, 6.3);
+      applyZoomDelta(event.deltaY * 0.0028);
+    };
+
+    // —— Pinch-to-zoom (móvil / trackpad multitáctil) ——
+    const onTouchStart = (event) => {
+      if (event.touches.length === 2) {
+        event.preventDefault();
+        dragState.active = false;
+        pinchState.active = true;
+        pinchState.startDistance = touchDistance(event.touches);
+        pinchState.startZ = camera.position.z;
+        context.focusQuaternion = null;
+        onHoverRef.current?.(null, null);
+      }
+    };
+
+    const onTouchMove = (event) => {
+      if (!pinchState.active || event.touches.length !== 2) return;
+      event.preventDefault();
+      const distance = touchDistance(event.touches);
+      if (pinchState.startDistance <= 0) return;
+      // Más separación → acercar (z menor); menos separación → alejar.
+      const scale = pinchState.startDistance / distance;
+      camera.position.z = THREE.MathUtils.clamp(
+        pinchState.startZ * scale,
+        CAMERA_Z_MIN,
+        CAMERA_Z_MAX,
+      );
+    };
+
+    const onTouchEnd = (event) => {
+      if (event.touches.length < 2) {
+        pinchState.active = false;
+        pinchState.startDistance = 0;
+      }
     };
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -584,6 +648,10 @@ export default function GlobeScene({
     renderer.domElement.addEventListener('pointercancel', onPointerUp);
     renderer.domElement.addEventListener('pointerleave', onPointerLeave);
     renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
+    renderer.domElement.addEventListener('touchend', onTouchEnd);
+    renderer.domElement.addEventListener('touchcancel', onTouchEnd);
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
@@ -643,6 +711,10 @@ export default function GlobeScene({
       renderer.domElement.removeEventListener('pointercancel', onPointerUp);
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave);
       renderer.domElement.removeEventListener('wheel', onWheel);
+      renderer.domElement.removeEventListener('touchstart', onTouchStart);
+      renderer.domElement.removeEventListener('touchmove', onTouchMove);
+      renderer.domElement.removeEventListener('touchend', onTouchEnd);
+      renderer.domElement.removeEventListener('touchcancel', onTouchEnd);
       disposeObject(scene);
       renderer.dispose();
       renderer.domElement.remove();

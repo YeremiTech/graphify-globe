@@ -392,8 +392,18 @@ code { color: #78eeb4; }
   box-shadow: 24px 0 72px rgba(0,0,0,0.4);
   backdrop-filter: blur(18px);
   animation: slide-in-left 180ms ease-out;
+  transition: transform 240ms ease;
+  will-change: transform;
 }
 @keyframes slide-in-left { from { transform: translateX(-22px); opacity: 0; } }
+
+/* Pestaña del borde (solo relevante en móvil cuando el panel está oculto). */
+.panel-edge-tab {
+  display: none;
+}
+.panel-drag-hint {
+  display: none;
+}
 
 .node-panel-search {
   position: relative;
@@ -661,23 +671,84 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   }
   .import-panel h1 { font-size: clamp(1.2rem, 5.6vw, 1.55rem); margin: 10px 0 11px; }
   .import-panel p { font-size: 0.72rem; margin: 0 0 16px; }
-  .app-shell.has-graph .globe-host { left: 0; bottom: 17vh; }
+
+  /* Globo a pantalla completa: el panel ya no empuja desde abajo. */
+  .app-shell.has-graph .globe-host { left: 0; bottom: 0; }
   .graph-summary { top: calc(var(--topbar-height) + 9px); right: 9px; max-width: calc(100vw - 18px); gap: 5px; }
   .graph-summary span { padding: 6px 8px; font-size: 0.56rem; }
+
+  /*
+   * Panel como drawer lateral: se desliza L↔R.
+   * .is-collapsed → translateX(-100%) (oculto a la izquierda).
+   */
   .node-panel {
-    top: auto;
+    top: var(--topbar-height);
     left: 0;
-    right: 0;
+    right: auto;
     bottom: 0;
-    width: 100%;
-    height: min(58vh, 570px);
-    border-top: 1px solid var(--line);
-    border-right: 0;
-    box-shadow: 0 -24px 72px rgba(0,0,0,0.54);
-    animation: slide-in-bottom 190ms ease-out;
+    width: min(88vw, 360px);
+    height: auto;
+    max-height: none;
+    border-top: 0;
+    border-right: 1px solid var(--line);
+    box-shadow: 24px 0 72px rgba(0,0,0,0.54);
+    animation: none;
+    transform: translateX(0);
   }
-  .node-panel.is-empty { height: min(34vh, 280px); }
-  @keyframes slide-in-bottom { from { transform: translateY(22px); opacity: 0; } }
+  .node-panel.is-empty,
+  .node-panel.has-selection {
+    height: auto;
+  }
+  .node-panel.is-collapsed {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+  .node-panel.is-open {
+    pointer-events: auto;
+  }
+
+  .panel-drag-hint {
+    display: flex;
+    justify-content: center;
+    padding: 0 0 8px;
+  }
+  .panel-drag-hint span {
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(100, 160, 133, 0.45);
+  }
+
+  .panel-edge-tab {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    z-index: 17;
+    top: calc(50% + (var(--topbar-height) / 2));
+    left: 0;
+    width: 28px;
+    height: 56px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    color: var(--green);
+    background: rgba(4, 17, 12, 0.92);
+    box-shadow: 8px 0 24px rgba(0,0,0,0.35);
+    backdrop-filter: blur(12px);
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+  .panel-edge-tab.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%) translateX(-8px);
+  }
+  .panel-edge-tab:active {
+    background: rgba(8, 36, 24, 0.96);
+  }
+
   .node-panel-search { padding: 11px 12px 10px; }
   .search-label-row { margin-bottom: 6px; }
   .search-field { height: 40px; }
@@ -688,11 +759,14 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   .node-empty-state p { margin: 8px 0 13px; }
   .status-line {
     right: 10px;
-    bottom: calc(min(58vh, 570px) + 9px);
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
     max-width: calc(100vw - 20px);
     font-size: 0.55rem;
   }
-  .app-shell.no-selection .status-line { bottom: calc(min(34vh, 280px) + 9px); }
+  .app-shell.no-selection .status-line,
+  .app-shell.has-selection .status-line {
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
   .app-shell.is-empty .status-line {
     left: 50%;
     right: auto;
@@ -717,15 +791,12 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   .graph-summary .summary-muted { display: none; }
   .graph-summary span { background: rgba(2, 15, 10, 0.82); }
   .status-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .node-panel { height: min(62vh, 590px); }
-  .node-panel.is-empty { height: min(37vh, 300px); }
+  .node-panel { width: min(92vw, 360px); }
   .node-panel-header h2 { font-size: 0.93rem; }
   .node-type-row small { font-size: 0.58rem; }
   .focus-legend { gap: 7px 9px; }
   .node-field-grid { gap: 4px; }
   .node-field-grid span + span { padding-left: 6px; }
-  .status-line { bottom: calc(min(62vh, 590px) + 7px); }
-  .app-shell.no-selection .status-line { bottom: calc(min(37vh, 300px) + 7px); }
   .app-shell.is-empty .status-line {
     left: 50%;
     right: auto;
@@ -758,7 +829,7 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   }
   .import-panel h1 { font-size: 1.15rem; margin: 8px 0 8px; }
   .import-panel p { margin: 0 0 12px; font-size: 0.68rem; }
-  .node-panel, .node-panel.is-empty {
+  .node-panel, .node-panel.is-empty, .node-panel.has-selection {
     top: var(--topbar-height);
     left: 0;
     right: auto;
@@ -770,7 +841,34 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
     box-shadow: 20px 0 55px rgba(0,0,0,0.48);
     animation: slide-in-left 180ms ease-out;
   }
-  .app-shell.has-graph .globe-host { left: 74px; bottom: 0; }
+  .node-panel.is-collapsed {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+  .panel-edge-tab {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    z-index: 17;
+    top: calc(50% + (var(--topbar-height) / 2));
+    left: 0;
+    width: 26px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    color: var(--green);
+    background: rgba(4, 17, 12, 0.92);
+    cursor: pointer;
+    transform: translateY(-50%);
+  }
+  .panel-edge-tab.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .app-shell.has-graph .globe-host { left: 0; bottom: 0; }
+  .app-shell.has-graph.panel-open .globe-host { left: 74px; }
   .node-panel-search { padding: 9px 11px; }
   .search-label-row { display: none; }
   .search-results { max-height: calc(100vh - 116px); }

@@ -34,6 +34,8 @@ export default function App() {
   const [error, setError] = useState('');
   const [draggingFile, setDraggingFile] = useState(false);
   const [resetToken, setResetToken] = useState(0);
+  // En móvil el panel se puede ocultar/mostrar con swipe; en desktop permanece visible.
+  const [panelOpen, setPanelOpen] = useState(true);
   const inputRef = useRef(null);
   const workerRef = useRef(null);
   const pendingFileRef = useRef(null);
@@ -56,6 +58,7 @@ export default function App() {
         setGraph(message.graph);
         setSelectedNode(null);
         setHoveredNode(null);
+        setPanelOpen(true);
         setProgress(100);
         setLoading(false);
         setError('');
@@ -169,15 +172,25 @@ export default function App() {
     setGraph(null);
     setSelectedNode(null);
     setHoveredNode(null);
+    setPanelOpen(true);
     setError('');
     setProgress(0);
     setStatus('Importa un graph.json para comenzar');
   };
 
+  // Seleccionar un nodo abre el panel (útil si estaba oculto en móvil).
+  const handleSelectNode = useCallback((node) => {
+    setSelectedNode(node);
+    if (node) setPanelOpen(true);
+  }, []);
+
   const selectedIndex = selectedNode?.index ?? -1;
 
   return (
-    <main className={`app-shell ${graph ? 'has-graph' : 'is-empty'} ${selectedNode ? 'has-selection' : 'no-selection'}`} {...dropHandlers}>
+    <main
+      className={`app-shell ${graph ? 'has-graph' : 'is-empty'} ${selectedNode ? 'has-selection' : 'no-selection'} ${panelOpen ? 'panel-open' : 'panel-collapsed'}`}
+      {...dropHandlers}
+    >
       <input
         ref={inputRef}
         className="sr-only"
@@ -191,7 +204,7 @@ export default function App() {
         autoRotate={autoRotate}
         selectedIndex={selectedIndex}
         resetToken={resetToken}
-        onNodeSelect={setSelectedNode}
+        onNodeSelect={handleSelectNode}
         onNodeHover={(node, screenPoint) => {
           setHoveredNode(node);
           if (screenPoint) setPointer(screenPoint);
@@ -302,8 +315,10 @@ export default function App() {
       <NodeInfoPanel
         node={selectedNode}
         graph={graph}
+        isOpen={panelOpen}
+        onOpenChange={setPanelOpen}
         onClose={() => setSelectedNode(null)}
-        onSelectNode={setSelectedNode}
+        onSelectNode={handleSelectNode}
       />
 
       {draggingFile && (
