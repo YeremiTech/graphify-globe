@@ -140,11 +140,13 @@ code { color: #78eeb4; }
 .icon-button.danger:hover { border-color: rgba(255, 104, 104, 0.72); color: #ff8d8d; }
 
 .import-panel {
+  --import-gutter: clamp(16px, 4.5vw, 110px);
   position: absolute;
   z-index: 9;
   top: 50%;
-  left: clamp(18px, 7vw, 110px);
-  width: min(440px, calc(100vw - 36px));
+  left: var(--import-gutter);
+  width: min(440px, calc(100vw - (2 * var(--import-gutter))));
+  max-width: calc(100vw - (2 * var(--import-gutter)));
   transform: translateY(-46%);
   padding: 27px;
   border: 1px solid var(--line);
@@ -523,6 +525,16 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   .brand-block small { max-width: 34vw; font-size: 0.54rem; }
   .icon-button { width: 34px; height: 34px; }
   .tool-button { min-height: 34px; padding: 0 10px; font-size: 0.62rem; }
+  .import-panel {
+    --import-gutter: max(16px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+    left: 50%;
+    width: min(440px, calc(100vw - (2 * var(--import-gutter))));
+    max-width: calc(100vw - (2 * var(--import-gutter)));
+    transform: translate(-50%, -42%);
+    padding: 22px 18px;
+  }
+  .import-panel h1 { font-size: clamp(1.2rem, 5.6vw, 1.55rem); margin: 10px 0 11px; }
+  .import-panel p { font-size: 0.72rem; margin: 0 0 16px; }
   .app-shell.has-graph .globe-host { left: 0; bottom: 17vh; }
   .graph-summary { top: calc(var(--topbar-height) + 9px); right: 9px; max-width: calc(100vw - 18px); gap: 5px; }
   .graph-summary span { padding: 6px 8px; font-size: 0.56rem; }
@@ -555,6 +567,14 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
     font-size: 0.55rem;
   }
   .app-shell.no-selection .status-line { bottom: calc(min(34vh, 280px) + 9px); }
+  .app-shell.is-empty .status-line {
+    left: 50%;
+    right: auto;
+    bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    max-width: calc(100vw - 32px);
+    text-align: center;
+  }
   .node-tooltip { display: none; }
 }
 
@@ -580,6 +600,12 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
   .node-field-grid span + span { padding-left: 6px; }
   .status-line { bottom: calc(min(62vh, 590px) + 7px); }
   .app-shell.no-selection .status-line { bottom: calc(min(37vh, 300px) + 7px); }
+  .app-shell.is-empty .status-line {
+    left: 50%;
+    right: auto;
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+  }
 }
 
 @media (max-width: 380px) {
@@ -593,6 +619,19 @@ dd { margin: 5px 0 0; color: #ccebdd; font-size: 0.68rem; line-height: 1.45; ove
 @media (max-width: 900px) and (orientation: landscape) and (max-height: 560px) {
   :root { --topbar-height: 54px; }
   .topbar { min-height: var(--topbar-height); padding: 7px 10px; }
+  .import-panel {
+    --import-gutter: 16px;
+    left: 50%;
+    width: min(420px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - var(--topbar-height) - 24px);
+    overflow: auto;
+    transform: translate(-50%, -50%);
+    top: calc(50% + (var(--topbar-height) / 2));
+    padding: 16px 18px;
+  }
+  .import-panel h1 { font-size: 1.15rem; margin: 8px 0 8px; }
+  .import-panel p { margin: 0 0 12px; font-size: 0.68rem; }
   .node-panel, .node-panel.is-empty {
     top: var(--topbar-height);
     left: 0;
