@@ -2,6 +2,12 @@
 
 Visualizador local de archivos `graph.json` generados por Graphify, construido con React, Vite y Three.js.
 
+![Vista previa de Graphify Globe](docs/preview.png)
+
+## Demo
+
+https://yeremitech.github.io/graphify-globe/
+
 ## Funciones
 
 - El globo inicia vacío y carga el archivo mediante el selector o arrastrándolo a la ventana.
