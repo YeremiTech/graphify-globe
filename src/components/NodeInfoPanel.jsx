@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import GraphSearch from './GraphSearch.jsx';
+import { CONNECTION_PAGE_SIZE } from '../graph/constants.js';
 
 const EMPTY = [];
 /** Umbral en px para cerrar/abrir el panel con un gesto horizontal. */
@@ -12,9 +13,70 @@ function safeValue(value) {
   return String(value);
 }
 
+function buildConnections(node, graph, indexes) {
+  if (!node || !graph?.allEdges?.length) return EMPTY;
+
+  const fullIndex = node.fullIndex ?? indexes?.nodeIndexById?.get?.(node.id) ?? node.index;
+  const edgeIndexes = indexes?.connectedEdgeIndexesByNode?.get?.(fullIndex)
+    || indexes?.connectedEdgeIndexesByNode?.get?.(Number(fullIndex))
+    || [];
+
+  const directed = graph.directed !== false;
+  const output = [];
+  const pairState = new Map();
+
+  for (const edgeIndex of edgeIndexes) {
+    const edge = graph.allEdges[edgeIndex];
+    if (!edge) continue;
+
+    const isOutgoing = edge.sourceId === node.id || edge.source === fullIndex;
+    const relatedId = isOutgoing ? edge.targetId : edge.sourceId;
+    const relatedNode = indexes?.nodeById?.get?.(relatedId)
+      || graph.allNodes?.find((item) => item.id === relatedId);
+    if (!relatedNode) continue;
+
+    let direction;
+    if (!directed) {
+      direction = 'conectado';
+    } else if (edge.isSelfLoop) {
+      direction = 'self';
+    } else {
+      direction = isOutgoing ? 'saliente' : 'entrante';
+    }
+
+    const key = relatedId;
+    const state = pairState.get(key) || { incoming: false, outgoing: false };
+    if (direction === 'saliente') state.outgoing = true;
+    if (direction === 'entrante') state.incoming = true;
+    pairState.set(key, state);
+
+    output.push({
+      direction,
+      relation: edge.relation,
+      confidence: edge.confidence,
+      confidenceScore: edge.confidenceScore,
+      node: relatedNode,
+      edgeIndex,
+    });
+  }
+
+  if (directed) {
+    for (const connection of output) {
+      const state = pairState.get(connection.node.id);
+      if (state?.incoming && state?.outgoing && connection.direction !== 'self') {
+        connection.bidirectional = true;
+      }
+    }
+  }
+
+  return output;
+}
+
 export default function NodeInfoPanel({
   node,
   graph,
+  indexes,
+  searchNodes,
   isOpen = true,
   onOpenChange,
   onClose,
@@ -27,39 +89,21 @@ export default function NodeInfoPanel({
     startX: 0,
     startY: 0,
     lastX: 0,
-    locked: null, // 'x' | 'y' | null — evita mezclar scroll vertical con swipe
+    locked: null,
   });
+  const [visibleCount, setVisibleCount] = useState(CONNECTION_PAGE_SIZE);
 
-  const connections = useMemo(() => {
-    if (!node || !graph) return EMPTY;
-    const output = [];
+  useEffect(() => {
+    setVisibleCount(CONNECTION_PAGE_SIZE);
+  }, [node?.id]);
 
-    for (const edge of graph.edges) {
-      if (edge.source === node.index) {
-        const relatedNode = graph.nodes[edge.target];
-        if (relatedNode) {
-          output.push({
-            direction: 'saliente',
-            relation: edge.relation,
-            confidence: edge.confidence,
-            node: relatedNode,
-          });
-        }
-      } else if (edge.target === node.index) {
-        const relatedNode = graph.nodes[edge.source];
-        if (relatedNode) {
-          output.push({
-            direction: 'entrante',
-            relation: edge.relation,
-            confidence: edge.confidence,
-            node: relatedNode,
-          });
-        }
-      }
-      if (output.length >= 24) break;
-    }
-    return output;
-  }, [node, graph]);
+  const connections = useMemo(
+    () => buildConnections(node, graph, indexes),
+    [node, graph, indexes],
+  );
+
+  const visibleConnections = connections.slice(0, visibleCount);
+  const hasMore = connections.length > visibleCount;
 
   // Gestos táctiles: deslizar a la izquierda oculta; desde el borde izquierdo muestra.
   useEffect(() => {
@@ -102,7 +146,6 @@ export default function NodeInfoPanel({
       const dx = touch.clientX - swipe.startX;
       const dy = touch.clientY - swipe.startY;
 
-      // Dentro del panel: solo trata el gesto como swipe horizontal si supera al vertical.
       if (!swipe.fromEdge && swipe.locked === null) {
         if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
         swipe.locked = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
@@ -116,11 +159,9 @@ export default function NodeInfoPanel({
       if (!panel) return;
 
       if (isOpen) {
-        // Solo permitir arrastrar hacia la izquierda (ocultar).
         const offset = Math.min(0, dx);
         panel.style.transform = `translateX(${offset}px)`;
       } else if (swipe.fromEdge) {
-        // Arrastre desde el borde: el panel entra desde la izquierda.
         const width = panel.offsetWidth || window.innerWidth * 0.88;
         const offset = Math.min(0, -width + Math.max(0, dx));
         panel.style.transform = `translateX(${offset}px)`;
@@ -147,7 +188,6 @@ export default function NodeInfoPanel({
         onOpenChange(true);
       }
 
-      // Vuelve a la posición CSS final (abierto/cerrado) con transición.
       requestAnimationFrame(resetDragVisual);
     };
 
@@ -167,9 +207,13 @@ export default function NodeInfoPanel({
 
   if (!graph) return null;
 
+  const directed = graph.directed !== false;
+  const fullNode = node
+    ? (indexes?.nodeById?.get?.(node.id) || graph.allNodes?.find((item) => item.id === node.id) || node)
+    : null;
+
   return (
     <>
-      {/* Pestaña visible en el borde cuando el panel está oculto (móvil). */}
       <button
         type="button"
         className={`panel-edge-tab ${isOpen ? 'is-hidden' : ''}`}
@@ -181,7 +225,7 @@ export default function NodeInfoPanel({
 
       <aside
         ref={panelRef}
-        className={`node-panel ${node ? 'has-selection' : 'is-empty'} ${isOpen ? 'is-open' : 'is-collapsed'}`}
+        className={`node-panel ${fullNode ? 'has-selection' : 'is-empty'} ${isOpen ? 'is-open' : 'is-collapsed'}`}
         aria-label="Explorador del grafo"
         aria-hidden={!isOpen}
       >
@@ -189,20 +233,26 @@ export default function NodeInfoPanel({
           <div className="panel-drag-hint" aria-hidden="true">
             <span />
           </div>
-          <GraphSearch graph={graph} onSelectNode={onSelectNode} />
+          <GraphSearch nodes={searchNodes || graph.allNodes || graph.nodes} onSelectNode={onSelectNode} />
         </div>
 
         <div className="node-panel-scroll">
-          {!node ? (
+          {!fullNode ? (
             <div className="node-empty-state">
               <span className="empty-orbit" aria-hidden="true" />
               <strong>Explora el grafo</strong>
               <p>Busca por nombre, archivo, paquete o ID, o selecciona un punto directamente en el globo.</p>
               <div className="connection-legend empty-legend" aria-label="Leyenda de colores">
                 <span><i className="selected-point" />Seleccionado</span>
-                <span><i className="outgoing-point" />Destino saliente</span>
-                <span><i className="incoming-point" />Origen entrante</span>
-                <span><i className="bidirectional-point" />Doble dirección</span>
+                {directed ? (
+                  <>
+                    <span><i className="outgoing-point" />Destino saliente</span>
+                    <span><i className="incoming-point" />Origen entrante</span>
+                    <span><i className="bidirectional-point" />Doble dirección</span>
+                  </>
+                ) : (
+                  <span><i className="bidirectional-point" />Conectado</span>
+                )}
               </div>
             </div>
           ) : (
@@ -210,7 +260,7 @@ export default function NodeInfoPanel({
               <div className="node-panel-header">
                 <div>
                   <span>GRAPHIFY · NODE INFO</span>
-                  <h2>{node.label}</h2>
+                  <h2>{fullNode.label}</h2>
                 </div>
                 <button type="button" onClick={onClose} aria-label="Limpiar selección">
                   ×
@@ -218,52 +268,77 @@ export default function NodeInfoPanel({
               </div>
 
               <div className="node-type-row">
-                <span className="kind-dot" style={{ background: node.color, color: node.color }} />
-                <b>{node.kind}</b>
-                <small>{node.group}</small>
+                <span className="kind-dot" style={{ background: fullNode.color, color: fullNode.color }} />
+                <b>{fullNode.metadata?.originalKind || fullNode.kind}</b>
+                <small>{fullNode.communityName || fullNode.group}</small>
               </div>
 
               <div className="focus-legend" aria-label="Leyenda de conexiones destacadas">
                 <span><i className="selected-point" />Nodo seleccionado</span>
-                <span><i className="outgoing-point" />Saliente</span>
-                <span><i className="incoming-point" />Entrante</span>
-                <span><i className="bidirectional-point" />Bidireccional</span>
+                {directed ? (
+                  <>
+                    <span><i className="outgoing-point" />Saliente</span>
+                    <span><i className="incoming-point" />Entrante</span>
+                    <span><i className="bidirectional-point" />Bidireccional</span>
+                  </>
+                ) : (
+                  <span><i className="bidirectional-point" />Conectado</span>
+                )}
               </div>
 
               <dl className="node-fields">
                 <div>
                   <dt>ID</dt>
-                  <dd>{safeValue(node.id)}</dd>
+                  <dd>{safeValue(fullNode.id)}</dd>
                 </div>
                 <div>
                   <dt>Archivo</dt>
-                  <dd>{safeValue(node.file)}</dd>
+                  <dd>{safeValue(fullNode.file)}</dd>
                 </div>
                 <div>
                   <dt>Ubicación</dt>
-                  <dd>{safeValue(node.location)}</dd>
+                  <dd>{safeValue(fullNode.location)}</dd>
+                </div>
+                {fullNode.fileType ? (
+                  <div>
+                    <dt>File type</dt>
+                    <dd>{safeValue(fullNode.fileType)}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Comunidad</dt>
+                  <dd>{safeValue(fullNode.communityName || fullNode.group)}</dd>
                 </div>
                 <div className="node-field-grid">
-                  <span>
-                    <dt>Entrantes</dt>
-                    <dd>{node.incoming.toLocaleString('es')}</dd>
-                  </span>
-                  <span>
-                    <dt>Salientes</dt>
-                    <dd>{node.outgoing.toLocaleString('es')}</dd>
-                  </span>
+                  {directed ? (
+                    <>
+                      <span>
+                        <dt>Entrantes</dt>
+                        <dd>{fullNode.incoming.toLocaleString('es')}</dd>
+                      </span>
+                      <span>
+                        <dt>Salientes</dt>
+                        <dd>{fullNode.outgoing.toLocaleString('es')}</dd>
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      <dt>Conectados</dt>
+                      <dd>{fullNode.degree.toLocaleString('es')}</dd>
+                    </span>
+                  )}
                   <span>
                     <dt>Grado</dt>
-                    <dd>{node.degree.toLocaleString('es')}</dd>
+                    <dd>{fullNode.degree.toLocaleString('es')}</dd>
                   </span>
                 </div>
               </dl>
 
-              {node.metadata && Object.keys(node.metadata).length > 0 && (
+              {fullNode.metadata && Object.keys(fullNode.metadata).length > 0 && (
                 <section className="metadata-section">
                   <h3>Metadatos</h3>
                   <dl>
-                    {Object.entries(node.metadata).slice(0, 12).map(([key, value]) => (
+                    {Object.entries(fullNode.metadata).slice(0, 12).map(([key, value]) => (
                       <div key={key}>
                         <dt>{key}</dt>
                         <dd>{safeValue(value)}</dd>
@@ -274,33 +349,71 @@ export default function NodeInfoPanel({
               )}
 
               <section className="connections-section">
-                <h3>Conexiones visibles</h3>
+                <h3>Conexiones</h3>
+                {connections.length > 0 && (
+                  <p className="connections-count">
+                    Mostrando {visibleConnections.length.toLocaleString('es')} de{' '}
+                    {connections.length.toLocaleString('es')} conexiones
+                  </p>
+                )}
                 <div className="connection-legend" aria-label="Leyenda de conexiones">
-                  <span><i className="outgoing" />Salientes animadas</span>
-                  <span><i className="incoming" />Entrantes animadas</span>
+                  {directed ? (
+                    <>
+                      <span><i className="outgoing" />Salientes animadas</span>
+                      <span><i className="incoming" />Entrantes animadas</span>
+                    </>
+                  ) : (
+                    <span><i className="bidirectional-point" />Conexiones</span>
+                  )}
                 </div>
                 {connections.length === 0 ? (
-                  <p>No hay relaciones visibles para este nodo.</p>
+                  <p>No hay relaciones para este nodo.</p>
                 ) : (
-                  <div className="connection-list">
-                    {connections.map((connection, index) => (
+                  <>
+                    <div className="connection-list">
+                      {visibleConnections.map((connection, index) => {
+                        const directionClass = directed
+                          ? (connection.bidirectional ? 'bidirectional' : connection.direction)
+                          : 'conectado';
+                        const arrow = !directed
+                          ? '↔'
+                          : connection.direction === 'saliente'
+                            ? '→'
+                            : connection.direction === 'entrante'
+                              ? '←'
+                              : '↺';
+                        return (
+                          <button
+                            type="button"
+                            key={`${connection.node.id}-${connection.relation}-${connection.edgeIndex}-${index}`}
+                            className={directionClass === 'conectado' ? 'saliente' : directionClass}
+                            onClick={() => onSelectNode(connection.node)}
+                          >
+                            <span className={`direction ${connection.direction === 'conectado' ? 'saliente' : connection.direction}`}>
+                              {arrow}
+                            </span>
+                            <span className="connection-copy">
+                              <strong>{connection.node.label}</strong>
+                              <small>
+                                {connection.relation} · {connection.confidence}
+                                {connection.bidirectional ? ' · bidireccional' : ''}
+                              </small>
+                            </span>
+                            <span className={`connection-point ${connection.direction === 'entrante' ? 'incoming' : 'outgoing'}`} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {hasMore && (
                       <button
                         type="button"
-                        key={`${connection.node.id}-${connection.relation}-${index}`}
-                        className={connection.direction}
-                        onClick={() => onSelectNode(connection.node)}
+                        className="tool-button connections-more"
+                        onClick={() => setVisibleCount((value) => value + CONNECTION_PAGE_SIZE)}
                       >
-                        <span className={`direction ${connection.direction}`}>
-                          {connection.direction === 'saliente' ? '→' : '←'}
-                        </span>
-                        <span className="connection-copy">
-                          <strong>{connection.node.label}</strong>
-                          <small>{connection.relation} · {connection.confidence}</small>
-                        </span>
-                        <span className={`connection-point ${connection.direction}`} />
+                        Mostrar más
                       </button>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 )}
               </section>
             </>

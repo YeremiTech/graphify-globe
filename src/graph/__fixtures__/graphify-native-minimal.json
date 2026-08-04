@@ -1,0 +1,51 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "id": "A",
+      "label": "Alpha",
+      "kind": "class",
+      "source_file": "src/alpha.py",
+      "source_location": "L1-L10",
+      "community": 1,
+      "community_name": "Core",
+      "file_type": "code"
+    },
+    {
+      "id": "B",
+      "label": "Beta",
+      "kind": "function",
+      "source_file": "src/beta.py",
+      "community": 1,
+      "community_name": "Core",
+      "file_type": "code"
+    },
+    {
+      "id": "C",
+      "label": "Gamma",
+      "type": "module",
+      "source_file": "src/gamma.py",
+      "community": 2,
+      "community_name": "Utils",
+      "file_type": "code"
+    }
+  ],
+  "links": [
+    {
+      "source": "A",
+      "target": "B",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1
+    },
+    {
+      "source": "B",
+      "target": "C",
+      "relation": "imports",
+      "confidence": "INFERRED"
+    }
+  ],
+  "hyperedges": []
+}

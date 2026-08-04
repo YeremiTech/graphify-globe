@@ -9,16 +9,24 @@ const CAMERA_Z_DEFAULT = 5.85;
 const CAMERA_Z_MIN = 3.0;
 const CAMERA_Z_MAX = 9.2;
 const NODE_COLORS = {
+  project: '#5ce0a8',
+  module: '#9c68ff',
+  package: '#9c68ff',
+  directory: '#4aa3d8',
+  file: '#2d8cff',
   class: '#39e97e',
   interface: '#35dcff',
-  method: '#f02ba6',
   function: '#f02ba6',
-  file: '#2d8cff',
-  package: '#9c68ff',
-  module: '#9c68ff',
+  method: '#f02ba6',
+  type: '#7ad4ff',
+  enum: '#c4f06a',
+  endpoint: '#ffca4b',
   table: '#e8f12f',
   config: '#ff7a33',
-  endpoint: '#ffca4b',
+  document: '#8fd4b8',
+  image: '#66c2ff',
+  external: '#a0b8ad',
+  unknown: '#b7dfcf',
   default: '#b7dfcf',
 };
 const SELECTED_COLOR = 0xf4fff9;
@@ -228,13 +236,19 @@ export default function GlobeScene({
 
     const focusEdges = [];
     const relationStates = new Map();
+    const directed = graphRef.current?.directed !== false;
+
     for (const edge of graphRef.current.edges) {
       if (edge.source !== selectedIndex && edge.target !== selectedIndex) continue;
       focusEdges.push(edge);
       const neighborIndex = edge.source === selectedIndex ? edge.target : edge.source;
-      const state = relationStates.get(neighborIndex) || { incoming: false, outgoing: false };
-      if (edge.source === selectedIndex) state.outgoing = true;
-      if (edge.target === selectedIndex) state.incoming = true;
+      const state = relationStates.get(neighborIndex) || { incoming: false, outgoing: false, connected: false };
+      if (!directed) {
+        state.connected = true;
+      } else {
+        if (edge.source === selectedIndex) state.outgoing = true;
+        if (edge.target === selectedIndex) state.incoming = true;
+      }
       relationStates.set(neighborIndex, state);
     }
 
@@ -253,6 +267,8 @@ export default function GlobeScene({
         const state = relationStates.get(index);
         if (!state) {
           context.nodesMesh.setColorAt(index, dimmed);
+        } else if (!directed || state.connected) {
+          context.nodesMesh.setColorAt(index, bidirectionalColor);
         } else if (state.incoming && state.outgoing) {
           context.nodesMesh.setColorAt(index, bidirectionalColor);
         } else if (state.incoming) {
@@ -273,13 +289,18 @@ export default function GlobeScene({
 
     const incomingVertices = [];
     const outgoingVertices = [];
+    const connectedVertices = [];
     const particleData = [];
 
     for (const edge of focusEdges) {
       const start = context.nodeVectors[edge.source];
       const end = context.nodeVectors[edge.target];
       if (!start || !end) continue;
-      const target = edge.source === selectedIndex ? outgoingVertices : incomingVertices;
+      const target = !directed
+        ? connectedVertices
+        : edge.source === selectedIndex
+          ? outgoingVertices
+          : incomingVertices;
       const lift = edge.confidence === 'INFERRED' ? 0.155 : 0.12;
       let previous = arcPoint(start, end, 0, lift);
       for (let segment = 1; segment <= 24; segment += 1) {
@@ -294,7 +315,8 @@ export default function GlobeScene({
           phase: (particleData.length * 0.38196601125) % 1,
           speed: 0.18 + (particleData.length % 6) * 0.017,
           lift,
-          incoming: edge.target === selectedIndex,
+          incoming: directed ? edge.target === selectedIndex : false,
+          connected: !directed,
         });
       }
     }
@@ -315,8 +337,12 @@ export default function GlobeScene({
       focusGroup.add(lines);
     };
 
-    addLines(outgoingVertices, OUTGOING_COLOR);
-    addLines(incomingVertices, INCOMING_COLOR);
+    if (directed) {
+      addLines(outgoingVertices, OUTGOING_COLOR);
+      addLines(incomingVertices, INCOMING_COLOR);
+    } else {
+      addLines(connectedVertices, BIDIRECTIONAL_COLOR);
+    }
 
     const glowPositions = [];
     const glowColors = [];
@@ -330,7 +356,8 @@ export default function GlobeScene({
 
     addGlow(selectedIndex, SELECTED_COLOR);
     relationStates.forEach((state, index) => {
-      if (state.incoming && state.outgoing) addGlow(index, BIDIRECTIONAL_COLOR);
+      if (!directed || state.connected) addGlow(index, BIDIRECTIONAL_COLOR);
+      else if (state.incoming && state.outgoing) addGlow(index, BIDIRECTIONAL_COLOR);
       else if (state.incoming) addGlow(index, INCOMING_COLOR);
       else addGlow(index, OUTGOING_COLOR);
     });
@@ -358,7 +385,13 @@ export default function GlobeScene({
       geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(particleData.length * 3), 3));
       const colors = new Float32Array(particleData.length * 3);
       particleData.forEach((particle, index) => {
-        const color = new THREE.Color(particle.incoming ? INCOMING_COLOR : OUTGOING_COLOR);
+        const color = new THREE.Color(
+          particle.connected
+            ? BIDIRECTIONAL_COLOR
+            : particle.incoming
+              ? INCOMING_COLOR
+              : OUTGOING_COLOR,
+        );
         colors[index * 3] = color.r;
         colors[index * 3 + 1] = color.g;
         colors[index * 3 + 2] = color.b;
@@ -769,7 +802,7 @@ export default function GlobeScene({
       dummy.scale.setScalar(scale);
       dummy.updateMatrix();
       nodesMesh.setMatrixAt(index, dummy.matrix);
-      const color = new THREE.Color(NODE_COLORS[node.kind] || NODE_COLORS.default);
+      const color = new THREE.Color(node.color || NODE_COLORS[node.kind] || NODE_COLORS.default);
       nodesMesh.setColorAt(index, color);
       colors.push(color.clone());
     }

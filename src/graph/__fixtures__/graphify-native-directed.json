@@ -1,0 +1,16 @@
+{
+  "directed": true,
+  "multigraph": false,
+  "graph": { "name": "directed-sample" },
+  "nodes": [
+    { "id": 1, "label": "Controller", "kind": "class", "source_file": "app/Controller.php", "community": 0, "community_name": "Web" },
+    { "id": 2, "label": "Service", "kind": "class", "source_file": "app/Service.php", "community": 0, "community_name": "Web" },
+    { "id": 3, "label": "Repository", "kind": "interface", "source_file": "app/Repository.php", "community": 1, "community_name": "Data" }
+  ],
+  "links": [
+    { "source": 1, "target": 2, "relation": "calls", "confidence": "EXTRACTED" },
+    { "source": 2, "target": 3, "relation": "uses", "confidence": "EXTRACTED", "confidence_score": 0.95 },
+    { "source": 3, "target": 2, "relation": "notifies", "confidence": "INFERRED" }
+  ],
+  "hyperedges": []
+}

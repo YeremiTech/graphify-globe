@@ -1,0 +1,17 @@
+{
+  "directed": true,
+  "multigraph": true,
+  "graph": {},
+  "nodes": [
+    { "id": "n1", "label": "Foo", "kind": "class", "source_file": "Foo.rs" },
+    { "id": "n2", "label": "Bar", "kind": "class", "source_file": "Bar.rs" }
+  ],
+  "links": [
+    { "source": "n1", "target": "n2", "relation": "calls", "confidence": "EXTRACTED" },
+    { "source": "n1", "target": "n2", "relation": "references", "confidence": "INFERRED" },
+    { "source": "n1", "target": "n1", "relation": "self_ref", "confidence": "AMBIGUOUS" }
+  ],
+  "hyperedges": [
+    { "nodes": ["n1", "n2"], "relation": "group" }
+  ]
+}

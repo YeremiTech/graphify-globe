@@ -10,9 +10,12 @@ export default function ImportPanel({
   quality,
   onQualityChange,
   onImport,
+  onOpenFolder,
+  supportsFolderPicker = false,
   loading,
   progress,
   error,
+  statusHints = [],
 }) {
   const listId = useId();
   const fieldRef = useRef(null);
@@ -112,6 +115,17 @@ export default function ImportPanel({
         {loading ? 'Procesando…' : 'Importar graph.json'}
       </button>
 
+      {supportsFolderPicker && (
+        <button
+          type="button"
+          className="tool-button folder-button"
+          onClick={onOpenFolder}
+          disabled={loading}
+        >
+          Abrir carpeta graphify-out
+        </button>
+      )}
+
       <div className="drop-hint">También puedes arrastrar el archivo a cualquier zona</div>
 
       {loading && (
@@ -124,6 +138,14 @@ export default function ImportPanel({
       )}
 
       {error && <div className="error-message">{error}</div>}
+
+      {statusHints.length > 0 && (
+        <ul className="import-hints">
+          {statusHints.map((hint) => (
+            <li key={hint}>{hint}</li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

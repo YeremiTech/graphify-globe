@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 function normalize(value) {
   return String(value || '').toLocaleLowerCase('es');
@@ -6,47 +12,75 @@ function normalize(value) {
 
 function scoreNode(node, term) {
   const label = normalize(node.label);
-  const fields = [node.id, node.file, node.group, node.kind].map(normalize);
+  const id = normalize(node.id);
   if (label === term) return 0;
   if (label.startsWith(term)) return 1;
   if (label.includes(term)) return 2;
-  if (fields.some((field) => field.startsWith(term))) return 3;
-  return 4;
+  if (id === term) return 3;
+  const secondary = normalize([
+    node.file,
+    node.communityName,
+    node.group,
+    node.kind,
+    node.metadata?.originalKind,
+    node.fileType,
+    node.metadata?.package,
+    node.metadata?.namespace,
+  ].join(' '));
+  if (secondary.includes(term)) return 4;
+  return 5;
 }
 
-export default function GraphSearch({ graph, onSelectNode }) {
+/**
+ * Search across all normalized nodes (not just the visible subset).
+ * Uses precomputed searchText and ranks every match before slicing top results.
+ */
+export default function GraphSearch({ nodes, onSelectNode }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const deferredQuery = useDeferredValue(query);
   const rootRef = useRef(null);
 
   const results = useMemo(() => {
-    const term = normalize(query).trim();
-    if (!term || !graph?.nodes) return [];
+    const term = normalize(deferredQuery).trim();
+    if (!term || !nodes?.length) return [];
 
     const tokens = term.split(/\s+/).filter(Boolean);
     const matches = [];
 
-    for (const node of graph.nodes) {
-      const searchable = normalize([node.label, node.id, node.file, node.group, node.kind].join(' '));
-      if (!tokens.every((token) => searchable.includes(token))) continue;
+    for (const node of nodes) {
+      const haystack = node.searchText || normalize([
+        node.label,
+        node.normalizedLabel,
+        node.id,
+        node.kind,
+        node.metadata?.originalKind,
+        node.file,
+        node.communityName,
+        node.group,
+        node.fileType,
+        node.metadata?.package,
+        node.metadata?.namespace,
+      ].join(' '));
+
+      if (!tokens.every((token) => haystack.includes(token))) continue;
       matches.push(node);
-      if (matches.length >= 160) break;
     }
 
-    return matches
-      .sort((a, b) => {
-        const scoreDifference = scoreNode(a, term) - scoreNode(b, term);
-        if (scoreDifference !== 0) return scoreDifference;
-        return b.degree - a.degree || a.label.localeCompare(b.label);
-      })
-      .slice(0, 18);
-  }, [graph, query]);
+    matches.sort((a, b) => {
+      const scoreDifference = scoreNode(a, term) - scoreNode(b, term);
+      if (scoreDifference !== 0) return scoreDifference;
+      return b.degree - a.degree || a.label.localeCompare(b.label);
+    });
+
+    return matches.slice(0, 18);
+  }, [nodes, deferredQuery]);
 
   useEffect(() => {
     setActiveIndex(0);
     setOpen(Boolean(query.trim()));
-  }, [query]);
+  }, [query, results.length]);
 
   useEffect(() => {
     const close = (event) => {
@@ -122,7 +156,7 @@ export default function GraphSearch({ graph, onSelectNode }) {
                 <span className="search-kind-dot" style={{ background: node.color, color: node.color }} />
                 <span className="search-result-copy">
                   <strong>{node.label}</strong>
-                  <small>{node.kind} · {node.group || node.file || node.id}</small>
+                  <small>{node.kind} · {node.communityName || node.group || node.file || node.id}</small>
                 </span>
                 <b>{node.degree}</b>
               </button>

@@ -1,0 +1,26 @@
+{
+  "nodes": [
+    {
+      "id": "controller",
+      "label": "ChatController",
+      "type": "class",
+      "source_file": "src/main/java/com/nexo/chat/ChatController.java",
+      "source_location": "L18-L95"
+    },
+    {
+      "id": "service",
+      "label": "ChatService",
+      "type": "class",
+      "source_file": "src/main/java/com/nexo/chat/ChatService.java",
+      "source_location": "L12-L164"
+    }
+  ],
+  "edges": [
+    {
+      "source": "controller",
+      "target": "service",
+      "relation": "calls",
+      "confidence": "EXTRACTED"
+    }
+  ]
+}

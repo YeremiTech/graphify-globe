@@ -1,0 +1,16 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    { "id": "ok", "label": "Valid", "kind": "weird_custom_kind", "community": 7 },
+    { "id": "ok", "label": "Duplicate", "kind": "class" },
+    { "id": "lonely", "label": "Lonely" }
+  ],
+  "links": [
+    { "source": "ok", "target": "missing", "relation": "points_to", "confidence": "EXTRACTED" },
+    { "source": "ok", "target": "ok", "relation": "loop", "confidence": "INFERRED" },
+    { "source": "ok", "target": "lonely", "relation": "contains" }
+  ],
+  "hyperedges": []
+}

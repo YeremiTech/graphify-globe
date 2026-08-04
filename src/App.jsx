@@ -1,28 +1,80 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import FilterMenu from './components/FilterMenu.jsx';
 import GlobeScene from './components/GlobeScene.jsx';
 import ImportPanel from './components/ImportPanel.jsx';
 import NodeInfoPanel from './components/NodeInfoPanel.jsx';
+import { hydrateIndexes } from './graph/buildGraphIndexes.js';
+import { KIND_COLORS, MAX_FILE_SIZE_BYTES, QUALITY_LIMITS } from './graph/constants.js';
+import { ensureNodeVisible } from './graph/selectVisibleSubgraph.js';
 
-const QUALITY_LIMITS = {
-  ligero: { maxNodes: 450, maxEdges: 1000, maxAnimatedEdges: 24 },
-  equilibrado: { maxNodes: 900, maxEdges: 2400, maxAnimatedEdges: 42 },
-  detallado: { maxNodes: 1800, maxEdges: 6000, maxAnimatedEdges: 64 },
-};
+function supportsDirectoryPicker() {
+  return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
+}
 
-function readFileAsText(file, onProgress) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo.'));
-    reader.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 55));
-    };
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.readAsText(file);
-  });
+async function findGraphJsonInDirectory(handle) {
+  // Direct graph.json in selected folder (user picked graphify-out).
+  try {
+    const direct = await handle.getFileHandle('graph.json');
+    return direct.getFile();
+  } catch {
+    // continue
+  }
+
+  // Project root → graphify-out/graph.json
+  try {
+    const outDir = await handle.getDirectoryHandle('graphify-out');
+    const nested = await outDir.getFileHandle('graph.json');
+    return nested.getFile();
+  } catch {
+    // continue
+  }
+
+  throw new Error(
+    'No se encontró graph.json. Selecciona la carpeta graphify-out o la raíz del proyecto que la contenga.',
+  );
+}
+
+function buildStatusMessage(graph) {
+  const parts = [];
+  if (graph.format === 'graphify-native') {
+    parts.push('Archivo Graphify detectado correctamente');
+  } else if (graph.format === 'graphify-legacy') {
+    parts.push('Formato legacy compatible cargado');
+  }
+
+  parts.push(
+    `Mostrando ${graph.visibleNodes.toLocaleString('es')} de ${graph.totalNodes.toLocaleString('es')} nodos`,
+  );
+  parts.push(
+    `Mostrando ${graph.visibleEdges.toLocaleString('es')} de ${graph.totalEdges.toLocaleString('es')} relaciones`,
+  );
+
+  if (graph.statistics?.communityCount) {
+    parts.push(`${graph.statistics.communityCount} comunidades detectadas`);
+  }
+  if (graph.statistics?.relationCount) {
+    parts.push(`${graph.statistics.relationCount} tipos de relación encontrados`);
+  }
+
+  return parts.join(' · ');
+}
+
+function applyVisibleSlice(graph, visible) {
+  return {
+    ...graph,
+    nodes: visible.nodes,
+    edges: visible.edges,
+    visibleNodes: visible.visibleNodes,
+    visibleEdges: visible.visibleEdges,
+    hiddenNodes: visible.hiddenNodes,
+    hiddenEdges: visible.hiddenEdges,
+    maxAnimatedEdges: visible.maxAnimatedEdges ?? graph.maxAnimatedEdges,
+  };
 }
 
 export default function App() {
   const [graph, setGraph] = useState(null);
+  const [indexes, setIndexes] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
@@ -34,11 +86,12 @@ export default function App() {
   const [error, setError] = useState('');
   const [draggingFile, setDraggingFile] = useState(false);
   const [resetToken, setResetToken] = useState(0);
-  // En móvil el panel se puede ocultar/mostrar con swipe; en desktop permanece visible.
   const [panelOpen, setPanelOpen] = useState(true);
+  const [relationFilter, setRelationFilter] = useState('all');
+  const [kindFilter, setKindFilter] = useState('all');
   const inputRef = useRef(null);
   const workerRef = useRef(null);
-  const pendingFileRef = useRef(null);
+  const folderSupported = useMemo(() => supportsDirectoryPicker(), []);
 
   useEffect(() => {
     const worker = new Worker(new URL('./workers/graphWorker.js', import.meta.url), {
@@ -49,23 +102,28 @@ export default function App() {
     worker.onmessage = (event) => {
       const message = event.data;
       if (message.type === 'progress') {
-        setProgress(55 + Math.round(message.value * 0.45));
+        setProgress(Math.max(5, Math.round(message.value * 100)));
         setStatus(message.label);
         return;
       }
 
       if (message.type === 'success') {
-        setGraph(message.graph);
+        const nextGraph = message.graph;
+        const hydrated = hydrateIndexes(nextGraph.indexes, {
+          nodes: nextGraph.allNodes,
+          edges: nextGraph.allEdges,
+        });
+        setGraph(nextGraph);
+        setIndexes(hydrated);
         setSelectedNode(null);
         setHoveredNode(null);
+        setRelationFilter('all');
+        setKindFilter('all');
         setPanelOpen(true);
         setProgress(100);
         setLoading(false);
         setError('');
-        setStatus(
-          `${message.graph.nodes.length.toLocaleString('es')} nodos y ${message.graph.edges.length.toLocaleString('es')} relaciones visibles`,
-        );
-        pendingFileRef.current = null;
+        setStatus(buildStatusMessage(nextGraph));
         return;
       }
 
@@ -74,7 +132,6 @@ export default function App() {
         setProgress(0);
         setError(message.message || 'El archivo no tiene un formato de grafo reconocido.');
         setStatus('No se pudo cargar el grafo');
-        pendingFileRef.current = null;
       }
     };
 
@@ -83,7 +140,6 @@ export default function App() {
       setProgress(0);
       setError(event.message || 'Falló el proceso de análisis del JSON.');
       setStatus('Error en el analizador');
-      pendingFileRef.current = null;
     };
 
     return () => worker.terminate();
@@ -107,32 +163,21 @@ export default function App() {
         return;
       }
 
-      if (file.size > 120 * 1024 * 1024) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
         setError('El archivo supera 120 MB. Reduce el grafo antes de importarlo.');
         return;
       }
 
       setLoading(true);
-      setProgress(1);
-      setStatus('Leyendo el archivo local…');
-      pendingFileRef.current = file.name;
+      setProgress(2);
+      setStatus('Enviando archivo al analizador…');
 
-      try {
-        const text = await readFileAsText(file, setProgress);
-        setProgress(55);
-        setStatus('Analizando nodos y relaciones…');
-        workerRef.current?.postMessage({
-          type: 'parse',
-          text,
-          fileName: file.name,
-          limits: QUALITY_LIMITS[quality],
-        });
-      } catch (readError) {
-        setLoading(false);
-        setProgress(0);
-        setError(readError.message || 'No se pudo leer el archivo.');
-        setStatus('No se pudo leer el archivo');
-      }
+      workerRef.current?.postMessage({
+        type: 'parse',
+        file,
+        fileName: file.name,
+        limits: QUALITY_LIMITS[quality],
+      });
     },
     [loading, quality],
   );
@@ -144,6 +189,19 @@ export default function App() {
   };
 
   const openPicker = () => inputRef.current?.click();
+
+  const openFolder = useCallback(async () => {
+    if (!folderSupported || loading) return;
+    setError('');
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'read' });
+      const file = await findGraphJsonInDirectory(handle);
+      await importFile(file);
+    } catch (folderError) {
+      if (folderError?.name === 'AbortError') return;
+      setError(folderError.message || 'No se pudo abrir la carpeta seleccionada.');
+    }
+  }, [folderSupported, importFile, loading]);
 
   const dropHandlers = useMemo(
     () => ({
@@ -170,21 +228,110 @@ export default function App() {
 
   const clearGraph = () => {
     setGraph(null);
+    setIndexes(null);
     setSelectedNode(null);
     setHoveredNode(null);
     setPanelOpen(true);
     setError('');
     setProgress(0);
+    setRelationFilter('all');
+    setKindFilter('all');
     setStatus('Importa un graph.json para comenzar');
   };
 
-  // Seleccionar un nodo abre el panel (útil si estaba oculto en móvil).
-  const handleSelectNode = useCallback((node) => {
-    setSelectedNode(node);
-    if (node) setPanelOpen(true);
-  }, []);
+  const revealAndSelect = useCallback((node) => {
+    if (!graph || !indexes || !node) return;
 
-  const selectedIndex = selectedNode?.index ?? -1;
+    const alreadyVisible = graph.nodes.some((item) => item.id === node.id);
+    if (alreadyVisible) {
+      const visibleNode = graph.nodes.find((item) => item.id === node.id);
+      setSelectedNode(visibleNode);
+      setPanelOpen(true);
+      return;
+    }
+
+    const visible = ensureNodeVisible(
+      { nodes: graph.allNodes, edges: graph.allEdges, directed: graph.directed, multigraph: graph.multigraph },
+      indexes,
+      { nodes: graph.nodes, edges: graph.edges },
+      node.id,
+      QUALITY_LIMITS[quality],
+    );
+
+    const nextGraph = applyVisibleSlice(graph, visible);
+    setGraph(nextGraph);
+    const visibleNode = nextGraph.nodes.find((item) => item.id === node.id);
+    setSelectedNode(visibleNode || node);
+    setPanelOpen(true);
+    setStatus(
+      `Nodo “${node.label}” incluido temporalmente · Mostrando ${nextGraph.visibleNodes.toLocaleString('es')} de ${nextGraph.totalNodes.toLocaleString('es')} nodos`,
+    );
+  }, [graph, indexes, quality]);
+
+  const handleSelectNode = useCallback((node) => {
+    if (!node) {
+      setSelectedNode(null);
+      return;
+    }
+    revealAndSelect(node);
+  }, [revealAndSelect]);
+
+  const diagnosticHints = useMemo(() => {
+    if (!graph?.diagnostics) return [];
+    const hints = [];
+    const d = graph.diagnostics;
+    if (d.danglingEdgeCount) {
+      hints.push(`${d.danglingEdgeCount} relaciones no pudieron resolverse`);
+    }
+    if (d.selfLoopCount) {
+      hints.push(`${d.selfLoopCount} self-loops detectados`);
+    }
+    if (graph.hyperedges?.length) {
+      hints.push(`${graph.hyperedges.length} hyperedges detectados (no renderizados)`);
+    }
+    if (d.duplicateNodeIdCount) {
+      hints.push(`${d.duplicateNodeIdCount} identificadores duplicados`);
+    }
+    return hints;
+  }, [graph]);
+
+  const renderGraph = useMemo(() => {
+    if (!graph) return null;
+    if (relationFilter === 'all' && kindFilter === 'all') return graph;
+
+    const allowedNodeIds = new Set(
+      graph.nodes
+        .filter((node) => kindFilter === 'all' || node.kind === kindFilter)
+        .map((node) => node.id),
+    );
+
+    const nodes = graph.nodes.filter((node) => allowedNodeIds.has(node.id));
+    const idToIndex = new Map(nodes.map((node, index) => [node.id, index]));
+    const remappedNodes = nodes.map((node, index) => ({ ...node, index }));
+
+    const edges = graph.edges
+      .filter((edge) => {
+        if (relationFilter !== 'all' && edge.relation !== relationFilter) return false;
+        return allowedNodeIds.has(edge.sourceId) && allowedNodeIds.has(edge.targetId);
+      })
+      .map((edge, index) => ({
+        ...edge,
+        index,
+        source: idToIndex.get(edge.sourceId),
+        target: idToIndex.get(edge.targetId),
+      }))
+      .filter((edge) => edge.source !== undefined && edge.target !== undefined);
+
+    return {
+      ...graph,
+      nodes: remappedNodes,
+      edges,
+    };
+  }, [graph, relationFilter, kindFilter]);
+
+  const renderSelectedIndex = selectedNode && renderGraph
+    ? renderGraph.nodes.findIndex((item) => item.id === selectedNode.id)
+    : -1;
 
   return (
     <main
@@ -200,9 +347,9 @@ export default function App() {
       />
 
       <GlobeScene
-        graph={graph}
+        graph={renderGraph}
         autoRotate={autoRotate}
-        selectedIndex={selectedIndex}
+        selectedIndex={renderSelectedIndex}
         resetToken={resetToken}
         onNodeSelect={handleSelectNode}
         onNodeHover={(node, screenPoint) => {
@@ -273,26 +420,78 @@ export default function App() {
           quality={quality}
           onQualityChange={setQuality}
           onImport={openPicker}
+          onOpenFolder={openFolder}
+          supportsFolderPicker={folderSupported}
           loading={loading}
           progress={progress}
           error={error}
         />
       )}
 
-
       {graph && (
         <section className="graph-summary" aria-label="Resumen del grafo">
           <span>
-            <b>{graph.nodes.length.toLocaleString('es')}</b> nodos
+            <b>{graph.visibleNodes.toLocaleString('es')}</b> nodos
           </span>
           <span>
-            <b>{graph.edges.length.toLocaleString('es')}</b> relaciones
+            <b>{graph.visibleEdges.toLocaleString('es')}</b> relaciones
           </span>
-          {(graph.totalNodes > graph.nodes.length || graph.totalEdges > graph.edges.length) && (
+          {(graph.hiddenNodes > 0 || graph.hiddenEdges > 0) && (
             <span className="summary-muted">
               de {graph.totalNodes.toLocaleString('es')} / {graph.totalEdges.toLocaleString('es')}
             </span>
           )}
+          {graph.statistics?.communityCount > 0 && (
+            <span className="summary-muted">
+              {graph.statistics.communityCount} comunidades
+            </span>
+          )}
+          {graph.format && (
+            <span className="summary-muted summary-format">
+              {graph.format === 'graphify-native' ? 'Graphify nativo' : 'Legacy'}
+              {graph.directed ? ' · dirigido' : ' · no dirigido'}
+            </span>
+          )}
+        </section>
+      )}
+
+      {graph?.statistics?.filters && (
+        <section className="graph-filters" aria-label="Filtros dinámicos">
+          <FilterMenu
+            label="Tipo"
+            value={kindFilter}
+            onChange={setKindFilter}
+            options={[
+              { value: 'all', label: 'Todos', hint: 'sin filtro de tipo' },
+              ...graph.statistics.filters.kinds.map((kind) => ({
+                value: kind,
+                label: kind,
+                hint: 'nodos visibles',
+                color: KIND_COLORS[kind] || KIND_COLORS.default,
+              })),
+            ]}
+          />
+          <FilterMenu
+            label="Relación"
+            value={relationFilter}
+            onChange={setRelationFilter}
+            options={[
+              { value: 'all', label: 'Todas', hint: 'sin filtro de relación' },
+              ...graph.statistics.filters.relations.map((relation) => ({
+                value: relation,
+                label: relation,
+                hint: 'aristas visibles',
+              })),
+            ]}
+          />
+        </section>
+      )}
+
+      {graph && diagnosticHints.length > 0 && (
+        <section className="graph-diagnostics" aria-label="Diagnósticos del archivo">
+          {diagnosticHints.map((hint) => (
+            <span key={hint}>{hint}</span>
+          ))}
         </section>
       )}
 
@@ -315,6 +514,8 @@ export default function App() {
       <NodeInfoPanel
         node={selectedNode}
         graph={graph}
+        indexes={indexes}
+        searchNodes={graph?.allNodes}
         isOpen={panelOpen}
         onOpenChange={setPanelOpen}
         onClose={() => setSelectedNode(null)}
