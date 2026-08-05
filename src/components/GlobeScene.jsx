@@ -34,7 +34,25 @@ const OUTGOING_COLOR = 0xff4db8;
 const INCOMING_COLOR = 0x37dfff;
 const BIDIRECTIONAL_COLOR = 0xffd166;
 const DIMMED_COLOR = 0x0b2419;
+const DEFAULT_YAW = -0.45;
+const DEFAULT_PITCH = -0.12;
+const WORLD_Y_AXIS = new THREE.Vector3(0, 1, 0);
+const AUTO_ROTATE_STEP = new THREE.Quaternion().setFromAxisAngle(WORLD_Y_AXIS, 0.00115);
 
+function applyOrbit(context) {
+  context.globe.quaternion.copy(context.orbitQuaternion);
+}
+
+function syncOrbit(context) {
+  context.orbitQuaternion.copy(context.globe.quaternion);
+}
+
+function resetOrbit(context) {
+  context.orbitQuaternion.setFromEuler(
+    new THREE.Euler(DEFAULT_PITCH, DEFAULT_YAW, 0, 'XYZ'),
+  );
+  context.globe.quaternion.copy(context.orbitQuaternion);
+}
 
 function lonLatToVector(lon, lat, radius = RADIUS) {
   const phi = THREE.MathUtils.degToRad(90 - lat);
@@ -417,7 +435,8 @@ export default function GlobeScene({
     const context = sceneRef.current;
     if (!context) return;
     context.camera.position.set(0, 0, CAMERA_Z_DEFAULT);
-    context.globe.rotation.set(-0.12, -0.45, 0);
+    context.focusQuaternion = null;
+    resetOrbit(context);
   }, [resetToken]);
 
   useEffect(() => {
@@ -439,7 +458,6 @@ export default function GlobeScene({
     host.appendChild(renderer.domElement);
 
     const globe = new THREE.Group();
-    globe.rotation.set(-0.12, -0.45, 0);
     scene.add(globe);
 
     scene.add(makeStars());
@@ -559,10 +577,12 @@ export default function GlobeScene({
       focusParticles: null,
       baseColors: [],
       focusQuaternion: null,
+      orbitQuaternion: new THREE.Quaternion(),
       animationFrame: 0,
       clock: new THREE.Clock(),
     };
     sceneRef.current = context;
+    resetOrbit(context);
 
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
@@ -595,6 +615,7 @@ export default function GlobeScene({
       // Con pellizco activo no iniciar arrastre de rotación.
       if (pinchState.active) return;
       dragState.active = true;
+      syncOrbit(context);
       context.focusQuaternion = null;
       dragState.moved = false;
       dragState.startX = event.clientX;
@@ -613,8 +634,14 @@ export default function GlobeScene({
         if (Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) > 4) {
           dragState.moved = true;
         }
-        globe.rotation.y += dx * 0.0052;
-        globe.rotation.x = THREE.MathUtils.clamp(globe.rotation.x + dy * 0.0042, -1.15, 1.15);
+        const pitchAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(context.orbitQuaternion);
+        context.orbitQuaternion.premultiply(
+          new THREE.Quaternion().setFromAxisAngle(pitchAxis, dy * 0.0042),
+        );
+        context.orbitQuaternion.premultiply(
+          new THREE.Quaternion().setFromAxisAngle(WORLD_Y_AXIS, dx * 0.0052),
+        );
+        applyOrbit(context);
         dragState.lastX = event.clientX;
         dragState.lastY = event.clientY;
         onHoverRef.current?.(null, null);
@@ -649,6 +676,7 @@ export default function GlobeScene({
         pinchState.active = true;
         pinchState.startDistance = touchDistance(event.touches);
         pinchState.startZ = camera.position.z;
+        syncOrbit(context);
         context.focusQuaternion = null;
         onHoverRef.current?.(null, null);
       }
@@ -696,9 +724,13 @@ export default function GlobeScene({
 
       if (context.focusQuaternion && !dragState.active) {
         globe.quaternion.slerp(context.focusQuaternion, 0.075);
-        if (globe.quaternion.angleTo(context.focusQuaternion) < 0.002) context.focusQuaternion = null;
+        if (globe.quaternion.angleTo(context.focusQuaternion) < 0.002) {
+          context.focusQuaternion = null;
+          syncOrbit(context);
+        }
       } else if (autoRotateRef.current && !dragState.active) {
-        globe.rotation.y += 0.00115;
+        context.orbitQuaternion.premultiply(AUTO_ROTATE_STEP);
+        applyOrbit(context);
       }
       atmosphere.rotation.y -= 0.0002;
 
