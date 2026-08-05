@@ -40,6 +40,7 @@ const WORLD_Y_AXIS = new THREE.Vector3(0, 1, 0);
 const AUTO_ROTATE_STEP = new THREE.Quaternion().setFromAxisAngle(WORLD_Y_AXIS, 0.00115);
 
 function applyOrbit(context) {
+  context.orbitQuaternion.normalize();
   context.globe.quaternion.copy(context.orbitQuaternion);
 }
 
@@ -634,7 +635,13 @@ export default function GlobeScene({
         if (Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) > 4) {
           dragState.moved = true;
         }
-        const pitchAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(context.orbitQuaternion);
+        const viewAxis = new THREE.Vector3(0, 0, 1).applyQuaternion(context.orbitQuaternion);
+        const pitchAxis = new THREE.Vector3().crossVectors(WORLD_Y_AXIS, viewAxis);
+        if (pitchAxis.lengthSq() < 1e-12) {
+          pitchAxis.set(1, 0, 0).applyQuaternion(context.orbitQuaternion);
+          pitchAxis.y = 0;
+        }
+        pitchAxis.normalize();
         context.orbitQuaternion.premultiply(
           new THREE.Quaternion().setFromAxisAngle(pitchAxis, dy * 0.0042),
         );
